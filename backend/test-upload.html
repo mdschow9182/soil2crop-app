@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Soil Report Upload Test</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+    }
+
+    .container {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+      padding: 40px;
+      max-width: 500px;
+      width: 100%;
+    }
+
+    h1 {
+      color: #333;
+      margin-bottom: 10px;
+      font-size: 28px;
+    }
+
+    .subtitle {
+      color: #666;
+      margin-bottom: 30px;
+      font-size: 14px;
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 8px;
+      color: #555;
+      font-weight: 600;
+    }
+
+    input[type="text"],
+    input[type="file"] {
+      width: 100%;
+      padding: 12px;
+      border: 2px solid #e0e0e0;
+      border-radius: 6px;
+      font-size: 14px;
+      transition: border-color 0.3s;
+    }
+
+    input[type="text"]:focus,
+    input[type="file"]:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+
+    .btn {
+      width: 100%;
+      padding: 14px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+    }
+
+    .btn:active {
+      transform: translateY(0);
+    }
+
+    .btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .response {
+      margin-top: 20px;
+      padding: 15px;
+      border-radius: 6px;
+      display: none;
+    }
+
+    .response.success {
+      background: #d4edda;
+      border: 1px solid #c3e6cb;
+      color: #155724;
+      display: block;
+    }
+
+    .response.error {
+      background: #f8d7da;
+      border: 1px solid #f5c6cb;
+      color: #721c24;
+      display: block;
+    }
+
+    .status {
+      margin-top: 10px;
+      font-size: 13px;
+      color: #666;
+    }
+
+    .info-box {
+      background: #e7f3ff;
+      border-left: 4px solid #2196F3;
+      padding: 12px;
+      margin-bottom: 20px;
+      border-radius: 4px;
+    }
+
+    .info-box code {
+      background: #fff;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-family: 'Courier New', monospace;
+      color: #d63384;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🌱 Soil Report Upload</h1>
+    <p class="subtitle">Test file upload functionality</p>
+
+    <div class="info-box">
+      <strong>API Endpoint:</strong><br>
+      <code>POST http://localhost:3000/soil-reports/upload</code>
+    </div>
+
+    <form id="uploadForm">
+      <div class="form-group">
+        <label for="farmerId">Farmer ID (optional):</label>
+        <input type="text" id="farmerId" placeholder="e.g., 69b1980e8fbc2ab6ba7b0519">
+      </div>
+
+      <div class="form-group">
+        <label for="soilReport">Select Soil Report (PDF or Image):</label>
+        <input type="file" id="soilReport" accept=".pdf,.jpg,.jpeg,.png" required>
+      </div>
+
+      <button type="submit" class="btn" id="submitBtn">
+        📤 Upload Report
+      </button>
+    </form>
+
+    <div id="response" class="response"></div>
+    <div id="status" class="status"></div>
+  </div>
+
+  <script>
+    const API_URL = 'http://localhost:3000';
+    const form = document.getElementById('uploadForm');
+    const responseDiv = document.getElementById('response');
+    const statusDiv = document.getElementById('status');
+    const submitBtn = document.getElementById('submitBtn');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      // Get values
+      const farmerId = document.getElementById('farmerId').value;
+      const fileInput = document.getElementById('soilReport');
+      const file = fileInput.files[0];
+
+      if (!file) {
+        showResponse('Please select a file', 'error');
+        return;
+      }
+
+      // Prepare FormData
+      const formData = new FormData();
+      formData.append('soil_report', file);
+      if (farmerId) {
+        formData.append('farmer_id', farmerId);
+      }
+
+      // Update UI
+      submitBtn.disabled = true;
+      submitBtn.textContent = '⏳ Uploading...';
+      responseDiv.className = 'response';
+      statusDiv.textContent = 'Connecting to server...';
+
+      try {
+        console.log('📤 Starting upload...');
+        console.log('File:', file.name, `(${(file.size / 1024).toFixed(2)} KB)`);
+        console.log('Farmer ID:', farmerId || 'Not provided');
+
+        const response = await fetch(`${API_URL}/soil-reports/upload`, {
+          method: 'POST',
+          body: formData
+        });
+
+        const data = await response.json();
+
+        if (response.ok && data.success) {
+          console.log('✅ Upload successful!', data);
+          
+          showResponse(
+            `<strong>✓ Upload Successful!</strong><br>
+             File: ${data.file.originalname}<br>
+             Saved: ${data.file.filename}<br>
+             Size: ${(data.file.size / 1024).toFixed(2)} KB`,
+            'success'
+          );
+          
+          statusDiv.textContent = `Server response time: ${new Date().toLocaleString()}`;
+          
+          // Reset form
+          form.reset();
+        } else {
+          console.error('❌ Upload failed:', data);
+          showResponse(
+            `<strong>✗ Upload Failed</strong><br>${data.message || 'Unknown error'}`,
+            'error'
+          );
+        }
+      } catch (error) {
+        console.error('❌ Network error:', error);
+        showResponse(
+          `<strong>✗ Connection Error</strong><br>
+           Cannot connect to server.<br>
+           Make sure backend is running on port 3000.<br><br>
+           <small>Error: ${error.message}</small>`,
+          'error'
+        );
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = '📤 Upload Report';
+      }
+    });
+
+    function showResponse(message, type) {
+      responseDiv.innerHTML = message;
+      responseDiv.className = `response ${type}`;
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,39 @@
+// Soil to Crop Recommendation API
+app.post("/soil2crop", (req, res) => {
+  const { farmer_id, soilType, pH, nitrogen, phosphorus, potassium } = req.body;
+
+  if (!farmer_id || !soilType || !pH) {
+    return res.status(400).json({
+      error: "Farmer ID, soil type, and pH are required"
+    });
+  }
+
+  // Crop recommendation rules
+  let crops = [];
+  let fertilizerLevel = "Medium";
+
+  if (soilType === "Sandy") {
+    crops = ["Groundnut", "Millets"];
+    fertilizerLevel = "High";
+  } else if (soilType === "Loamy") {
+    crops = ["Rice", "Wheat", "Maize"];
+    fertilizerLevel = "Medium";
+  } else if (soilType === "Clay") {
+    crops = ["Paddy", "Sugarcane"];
+    fertilizerLevel = "Low";
+  }
+
+  // Simple crop calendar (example)
+  const cropCalendar = {
+    sowing: "June - July",
+    growth: "August - September",
+    harvest: "October - November"
+  };
+
+  res.json({
+    farmer_id,
+    recommended_crops: crops,
+    fertilizer_level: fertilizerLevel,
+    crop_calendar: cropCalendar
+  });
+});

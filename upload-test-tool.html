@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Soil2Crop Upload Test Tool</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      max-width: 800px;
+      margin: 50px auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .card {
+      background: white;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    h1 { color: #22c55e; }
+    h2 { color: #16a34a; margin-top: 0; }
+    .status { 
+      padding: 10px; 
+      border-radius: 4px; 
+      margin: 10px 0;
+      font-weight: bold;
+    }
+    .success { background: #dcfce7; color: #166534; }
+    .error { background: #fee2e2; color: #991b1b; }
+    .info { background: #dbeafe; color: #1e40af; }
+    button {
+      background: #22c55e;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 16px;
+      margin: 5px;
+    }
+    button:hover { background: #16a34a; }
+    button:disabled { background: #9ca3af; cursor: not-allowed; }
+    .output {
+      background: #1f2937;
+      color: #10b981;
+      padding: 15px;
+      border-radius: 4px;
+      font-family: 'Courier New', monospace;
+      font-size: 14px;
+      overflow-x: auto;
+      white-space: pre-wrap;
+      margin: 10px 0;
+    }
+    .checklist { list-style: none; padding-left: 0; }
+    .checklist li {
+      padding: 8px;
+      margin: 5px 0;
+      border-left: 3px solid #e5e7eb;
+      padding-left: 10px;
+    }
+    .checklist li::before {
+      content: "⬜ ";
+      margin-right: 8px;
+    }
+    .checklist li.checked::before { content: "✅ "; }
+    .checklist li.failed::before { content: "❌ "; }
+    input[type="file"] {
+      margin: 10px 0;
+      padding: 10px;
+      border: 2px dashed #d1d5db;
+      border-radius: 4px;
+      width: 100%;
+    }
+  </style>
+</head>
+<body>
+  <h1>🌾 Soil2Crop Upload Test Tool</h1>
+  <p>Use this tool to debug and test the soil report upload functionality</p>
+
+  <!-- Backend Status -->
+  <div class="card">
+    <h2>1️⃣ Backend Status</h2>
+    <button onclick="checkBackend()">Check Backend Connection</button>
+    <div id="backend-status"></div>
+  </div>
+
+  <!-- Configuration Check -->
+  <div class="card">
+    <h2>2️⃣ Configuration Check</h2>
+    <button onclick="checkConfig()">Verify Configuration</button>
+    <div id="config-status"></div>
+  </div>
+
+  <!-- Farmer Login Check -->
+  <div class="card">
+    <h2>3️⃣ Farmer Login</h2>
+    <input type="text" id="farmer-id-input" placeholder="Enter Farmer ID (from localStorage)" style="width: 100%; padding: 10px; margin: 10px 0;">
+    <button onclick="getFarmerFromStorage()">Get from Browser Storage</button>
+    <button onclick="checkFarmerId()">Validate Farmer ID</button>
+    <div id="farmer-status"></div>
+  </div>
+
+  <!-- File Selection -->
+  <div class="card">
+    <h2>4️⃣ File Upload Test</h2>
+    <input type="file" id="test-file" accept=".pdf,.jpg,.jpeg,.png">
+    <div id="file-info"></div>
+    <button onclick="testUpload()" id="upload-btn" disabled>Test Upload</button>
+    <div id="upload-result"></div>
+  </div>
+
+  <!-- Debug Checklist -->
+  <div class="card">
+    <h2>📋 Debug Checklist</h2>
+    <ul class="checklist" id="checklist">
+      <li id="check-backend">Backend running on port 3000</li>
+      <li id="check-upload-endpoint">Upload endpoint exists</li>
+      <li id="check-cors">CORS enabled</li>
+      <li id="check-farmer">Farmer logged in</li>
+      <li id="check-file-type">File type valid (PDF/JPG/PNG)</li>
+      <li id="check-file-size">File size under 10MB</li>
+      <li id="check-formdata">FormData constructed correctly</li>
+    </ul>
+  </div>
+
+  <script>
+    const API_URL = 'http://localhost:3000';
+    let selectedFile = null;
+    let farmerId = null;
+
+    // Update checklist
+    function updateCheck(id, status) {
+      const el = document.getElementById(id);
+      if (el) {
+        el.className = status === 'checked' ? 'checked' : status === 'failed' ? 'failed' : '';
+      }
+    }
+
+    // 1. Check Backend
+    async function checkBackend() {
+      const statusDiv = document.getElementById('backend-status');
+      statusDiv.innerHTML = '<div class="info">Checking backend...</div>';
+      
+      try {
+        const response = await fetch(`${API_URL}/health`);
+        const data = await response.json();
+        
+        statusDiv.innerHTML = `
+          <div class="success">✅ Backend is running!</div>
+          <div class="output">${JSON.stringify(data, null, 2)}</div>
+        `;
+        updateCheck('check-backend', 'checked');
+        updateCheck('check-cors', 'checked');
+        
+        return true;
+      } catch (error) {
+        statusDiv.innerHTML = `
+          <div class="error">❌ Cannot connect to backend!</div>
+          <div class="output">Error: ${error.message}</div>
+          <div class="info">
+            <strong>Fix:</strong> Start the backend server:<br>
+            <code>cd backend && npm start</code>
+          </div>
+        `;
+        updateCheck('check-backend', 'failed');
+        updateCheck('check-cors', 'failed');
+        return false;
+      }
+    }
+
+    // 2. Check Configuration
+    async function checkConfig() {
+      const statusDiv = document.getElementById('config-status');
+      statusDiv.innerHTML = '<div class="info">Checking configuration...</div>';
+      
+      try {
+        const response = await fetch(`${API_URL}/upload-test`);
+        const data = await response.json();
+        
+        statusDiv.innerHTML = `
+          <div class="success">✅ Upload endpoint configured!</div>
+          <div class="output">${JSON.stringify(data, null, 2)}</div>
+        `;
+        updateCheck('check-upload-endpoint', 'checked');
+        
+        return true;
+      } catch (error) {
+        statusDiv.innerHTML = `
+          <div class="error">❌ Upload endpoint not found!</div>
+          <div class="output">Error: ${error.message}</div>
+        `;
+        updateCheck('check-upload-endpoint', 'failed');
+        return false;
+      }
+    }
+
+    // 3. Get Farmer ID from storage
+    function getFarmerFromStorage() {
+      const storedId = localStorage.getItem('farmer_id');
+      const input = document.getElementById('farmer-id-input');
+      
+      if (storedId) {
+        input.value = storedId;
+        farmerId = storedId;
+        document.getElementById('farmer-status').innerHTML = `
+          <div class="success">✅ Found Farmer ID in storage: ${storedId}</div>
+        `;
+        updateCheck('check-farmer', 'checked');
+      } else {
+        document.getElementById('farmer-status').innerHTML = `
+          <div class="error">❌ No Farmer ID found in localStorage</div>
+          <div class="info">
+            <strong>Fix:</strong> Login first at http://localhost:8081<br>
+            Or enter a test Farmer ID manually
+          </div>
+        `;
+        updateCheck('check-farmer', 'failed');
+      }
+    }
+
+    // Validate Farmer ID
+    function checkFarmerId() {
+      const input = document.getElementById('farmer-id-input');
+      farmerId = input.value.trim();
+      
+      if (!farmerId) {
+        document.getElementById('farmer-status').innerHTML = `
+          <div class="error">❌ Farmer ID is empty!</div>
+        `;
+        updateCheck('check-farmer', 'failed');
+        return false;
+      }
+      
+      // Check if it looks like a MongoDB ObjectId
+      const objectIdRegex = /^[0-9a-fA-F]{24}$/;
+      if (!objectIdRegex.test(farmerId)) {
+        document.getElementById('farmer-status').innerHTML = `
+          <div class="error">⚠️ Farmer ID doesn't look like a valid MongoDB ObjectId</div>
+          <div class="info">
+            Valid format: 24 hexadecimal characters<br>
+            Example: 67cab8a5e1d9d3f5e8b12345
+          </div>
+        `;
+        updateCheck('check-farmer', 'failed');
+        return false;
+      }
+      
+      document.getElementById('farmer-status').innerHTML = `
+        <div class="success">✅ Farmer ID is valid: ${farmerId}</div>
+      `;
+      updateCheck('check-farmer', 'checked');
+      return true;
+    }
+
+    // 4. File selection handler
+    document.getElementById('test-file').addEventListener('change', function(e) {
+      selectedFile = e.target.files[0];
+      const infoDiv = document.getElementById('file-info');
+      
+      if (!selectedFile) {
+        infoDiv.innerHTML = '';
+        document.getElementById('upload-btn').disabled = true;
+        return;
+      }
+      
+      const fileType = selectedFile.type;
+      const fileSize = selectedFile.size;
+      const allowedTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
+      const maxSize = 10 * 1024 * 1024; // 10MB
+      
+      let html = `<div class="info"><strong>File selected:</strong><br>`;
+      html += `Name: ${selectedFile.name}<br>`;
+      html += `Type: ${fileType}<br>`;
+      html += `Size: ${(fileSize / 1024).toFixed(2)} KB</div>`;
+      
+      // Check file type
+      if (!allowedTypes.includes(fileType)) {
+        html += `<div class="error">❌ Invalid file type! Must be PDF, JPG, or PNG</div>`;
+        updateCheck('check-file-type', 'failed');
+        document.getElementById('upload-btn').disabled = true;
+      } else {
+        html += `<div class="success">✅ File type is valid</div>`;
+        updateCheck('check-file-type', 'checked');
+        
+        // Check file size
+        if (fileSize > maxSize) {
+          html += `<div class="error">❌ File too large! Max 10MB</div>`;
+          updateCheck('check-file-size', 'failed');
+          document.getElementById('upload-btn').disabled = true;
+        } else {
+          html += `<div class="success">✅ File size is within limit</div>`;
+          updateCheck('check-file-size', 'checked');
+          document.getElementById('upload-btn').disabled = false;
+        }
+      }
+      
+      infoDiv.innerHTML = html;
+    });
+
+    // 5. Test Upload
+    async function testUpload() {
+      const resultDiv = document.getElementById('upload-result');
+      
+      if (!selectedFile || !farmerId) {
+        resultDiv.innerHTML = '<div class="error">Please select a file and enter Farmer ID first!</div>';
+        return;
+      }
+      
+      resultDiv.innerHTML = '<div class="info">🔄 Uploading...</div>';
+      
+      try {
+        const formData = new FormData();
+        formData.append('soil_report', selectedFile);
+        formData.append('farmer_id', farmerId);
+        
+        console.log('Uploading file:', selectedFile.name);
+        console.log('Farmer ID:', farmerId);
+        console.log('FormData entries:');
+        for (let [key, value] of formData.entries()) {
+          console.log(`  ${key}:`, value);
+        }
+        
+        const startTime = Date.now();
+        const response = await fetch(`${API_URL}/soil-reports/upload`, {
+          method: 'POST',
+          body: formData
+        });
+        const endTime = Date.now();
+        
+        const data = await response.json();
+        
+        let html = `<div class="output">`;
+        html += `<strong>Response (${endTime - startTime}ms):</strong>\n`;
+        html += `${JSON.stringify(data, null, 2)}`;
+        html += `</div>`;
+        
+        if (response.ok && data.success) {
+          html += `<div class="success">✅ Upload successful!</div>`;
+          html += `<div class="info">`;
+          if (data.data.extracted_values && Object.keys(data.data.extracted_values).length > 0) {
+            html += `<strong>Extracted values:</strong><br>`;
+            html += `<pre>${JSON.stringify(data.data.extracted_values, null, 2)}</pre>`;
+          } else {
+            html += `⚠️ No values extracted. Manual entry required.<br>`;
+          }
+          if (data.data.parsing_notes && data.data.parsing_notes.length > 0) {
+            html += `<strong>Notes:</strong><br>`;
+            html += `<ul>${data.data.parsing_notes.map(n => `<li>${n}</li>`).join('')}</ul>`;
+          }
+          html += `</div>`;
+          updateCheck('check-formdata', 'checked');
+        } else {
+          html += `<div class="error">❌ Upload failed!</div>`;
+          if (data.error) {
+            html += `<div class="info"><strong>Error:</strong> ${data.error}</div>`;
+          }
+          updateCheck('check-formdata', 'failed');
+        }
+        
+        resultDiv.innerHTML = html;
+        
+      } catch (error) {
+        resultDiv.innerHTML = `
+          <div class="error">❌ Upload failed with error!</div>
+          <div class="output">${error.message}</div>
+          <div class="info">
+            <strong>Common causes:</strong><br>
+            • Backend not running<br>
+            • Wrong Farmer ID format<br>
+            • CORS issue<br>
+            • Network problem
+          </div>
+        `;
+        updateCheck('check-formdata', 'failed');
+      }
+    }
+
+    // Auto-check on page load
+    window.onload = async () => {
+      const backendOk = await checkBackend();
+      if (backendOk) {
+        await checkConfig();
+      }
+    };
+  </script>
+</body>
+</html>

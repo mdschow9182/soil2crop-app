@@ -1,0 +1,28 @@
+# Dependencies
+node_modules/
+
+# Environment variables - NEVER commit this
+.env
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Database files (optional - comment out if you want to commit DB)
+# *.db
+# *.db-journal
+
+# Uploads (optional - comment out if you want to commit uploads)
+# uploads/
+
+# Editor directories
+.vscode/
+.idea/
+.DS_Store
+
+# Temporary files
+*.tmp
+*.temp
