@@ -1,3 +1,6 @@
+![GitHub repo size](https://img.shields.io/github/repo-size/mdschow9182/soil2crop-app)
+![GitHub stars](https://img.shields.io/github/stars/mdschow9182/soil2crop-app)
+![License](https://img.shields.io/github/license/mdschow9182/soil2crop-app)
 # 🌱 Soil2Crop AI Platform
 
 > **AI-powered Soil Analysis & Smart Crop Recommendation System for Farmers**
