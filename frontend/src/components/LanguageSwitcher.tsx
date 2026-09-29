@@ -2,25 +2,14 @@ import React from "react";
 import { Globe } from "lucide-react";
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
 import { useLanguage } from "@/context/LanguageContext";
-
-// Define all supported languages with proper metadata
-const LANGUAGES = [
-  { code: "en", name: "English", native: "English" },
-  { code: "te", name: "Telugu", native: "తెలుగు" },
-  { code: "hi", name: "Hindi", native: "हिंदी" },
-  { code: "ta", name: "Tamil", native: "தமிழ்" },
-  { code: "kn", name: "Kannada", native: "ಕನ್ನಡ" },
-  { code: "ml", name: "Malayalam", native: "മലയാളം" },
-] as const;
-
-type LanguageCode = typeof LANGUAGES[number]["code"];
+import { supportedLanguages, type LanguageCode } from "@/i18n/translations";
 
 const LanguageSwitcher = () => {
-  const { language, setLanguage } = useLanguage();
+  const { language, setLanguage, t } = useLanguage();
 
   const handleChange = (value: string) => {
     // Validate the value is a supported language code
-    const isValidLanguage = LANGUAGES.some(lang => lang.code === value);
+    const isValidLanguage = supportedLanguages.some(lang => lang.code === value);
     
     if (!isValidLanguage) {
       console.error('[LanguageSwitcher] Invalid language selected:', value);
@@ -35,11 +24,11 @@ const LanguageSwitcher = () => {
     <div className="inline-flex items-center gap-2">
       <Globe className="w-5 h-5 text-muted-foreground" />
       <Select value={language} onValueChange={handleChange}>
-        <SelectTrigger className="w-[140px] h-9 text-sm" aria-label="Select language">
-          <SelectValue placeholder="Select language" />
+        <SelectTrigger className="h-11 w-[160px] text-sm" aria-label={t.selectAppLanguage}>
+          <SelectValue placeholder={t.selectAppLanguage} />
         </SelectTrigger>
         <SelectContent>
-          {LANGUAGES.map((lang) => (
+          {supportedLanguages.map((lang) => (
             <SelectItem 
               key={lang.code} 
               value={lang.code}

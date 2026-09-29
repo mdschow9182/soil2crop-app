@@ -1,19 +1,6 @@
-import axios from "axios";
+// Compatibility import for existing components. The canonical client lives in
+// src/api.js and owns the shared API base URL and request handling.
+import api, { API_BASE_URL } from "@/api";
 
-const api = axios.create({
-  baseURL: "http://localhost:3000",
-  headers: {
-    "Content-Type": "application/json",
-  },
-});
-
-// Attach farmer_id automatically if available
-api.interceptors.request.use((config) => {
-  const farmerId = localStorage.getItem("farmer_id");
-  if (farmerId) {
-    config.headers["x-farmer-id"] = farmerId;
-  }
-  return config;
-});
-
+export { API_BASE_URL };
 export default api;

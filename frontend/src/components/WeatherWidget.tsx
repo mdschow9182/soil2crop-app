@@ -1,20 +1,23 @@
 import React, { useEffect, useState } from 'react';
 import { Cloud, Sun, CloudRain, Wind, Droplets, Thermometer } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import api from '@/lib/api';
+import api from '@/api';
 
 interface WeatherData {
   temperature: number;
-  feels_like: number;
+  feels_like?: number;
   humidity: number;
-  pressure: number;
-  wind_speed: number;
-  rainfall_probability: number;
-  description: string;
-  icon: string;
+  pressure?: number;
+  wind_speed?: number;
+  rainfall?: number;
+  rainfall_probability?: number;
+  description?: string;
+  condition?: string;
+  icon?: string;
   irrigation_suggestion?: string;
   timestamp?: string;
   city?: string;
+  location?: string;
   country?: string;
 }
 
@@ -39,12 +42,12 @@ export const WeatherWidget = ({
         setLoading(true);
         setError(null);
         
-       const response = await api.get('/api/weather', {
-          params: { lat: latitude, lon: longitude }
+        const response = await api.get('/api/weather', {
+          params: { location }
         });
         
-       if (response.data.success && response.data.data) {
-          setWeather(response.data.data);
+       if (response.data.success && response.data.weather) {
+          setWeather(response.data.weather);
         } else {
           setError('Failed to fetch weather data');
         }
@@ -61,9 +64,9 @@ export const WeatherWidget = ({
     // Refresh weather every 30 minutes
    const interval = setInterval(fetchWeather, 30 * 60 * 1000);
    return () => clearInterval(interval);
-  }, [latitude, longitude]);
+  }, [location]);
 
- const getWeatherIcon = (iconCode: string) => {
+ const getWeatherIcon = (iconCode?: string) => {
   switch (iconCode?.charAt(0)) {
     case '01':
      return <Sun className="w-12 h-12 text-yellow-500" />;
@@ -128,7 +131,7 @@ export const WeatherWidget = ({
         <CardTitle className="text-lg font-bold text-blue-900 flex items-center justify-between">
           <span>🌤️ {location}</span>
           <span className="text-xs font-normal text-blue-700">
-            {new Date(weather.timestamp).toLocaleTimeString()}
+            {weather.timestamp ? new Date(weather.timestamp).toLocaleTimeString() : 'Current advisory'}
           </span>
         </CardTitle>
       </CardHeader>
@@ -143,7 +146,7 @@ export const WeatherWidget = ({
                 {weather.temperature}°C
               </div>
               <div className="text-sm text-blue-700 capitalize">
-                {weather.description}
+                {weather.description || weather.condition || 'Conditions unavailable'}
               </div>
             </div>
           </div>
@@ -153,7 +156,7 @@ export const WeatherWidget = ({
               Feels like {weather.feels_like}°C
             </div>
             <div className="text-xs text-blue-600 mt-1">
-              {weather.city || location}
+              {weather.city || weather.location || location}
             </div>
           </div>
         </div>
@@ -172,7 +175,7 @@ export const WeatherWidget = ({
             <Wind className="w-5 h-5 text-green-600" />
             <div>
               <div className="text-xs text-gray-600">Wind</div>
-              <div className="font-semibold text-blue-900">{weather.wind_speed} m/s</div>
+              <div className="font-semibold text-blue-900">{weather.wind_speed !== undefined ? `${weather.wind_speed} m/s` : 'Not available'}</div>
             </div>
           </div>
           
@@ -180,16 +183,16 @@ export const WeatherWidget = ({
             <Thermometer className="w-5 h-5 text-red-600" />
             <div>
               <div className="text-xs text-gray-600">Pressure</div>
-              <div className="font-semibold text-blue-900">{weather.pressure} hPa</div>
+              <div className="font-semibold text-blue-900">{weather.pressure !== undefined ? `${weather.pressure} hPa` : 'Not available'}</div>
             </div>
           </div>
           
           <div className="flex items-center space-x-2 bg-white/60 rounded-lg p-2">
             <CloudRain className="w-5 h-5 text-indigo-600" />
             <div>
-              <div className="text-xs text-gray-600">Rain Chance</div>
+              <div className="text-xs text-gray-600">Rainfall</div>
               <div className="font-semibold text-blue-900">
-                {Math.round(weather.rainfall_probability* 100)}%
+                {weather.rainfall !== undefined ? `${weather.rainfall} mm` : 'Not available'}
               </div>
             </div>
           </div>

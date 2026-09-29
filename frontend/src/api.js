@@ -1,25 +1,80 @@
 // API Service for Soil2Crop Frontend
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+const configuredApiUrl = (import.meta.env.VITE_API_URL || '').trim().replace(/\/$/, '');
+const isAndroidLanBuild = import.meta.env.MODE === 'android';
+
+const isPrivateLanIpv4 = (hostname) => {
+  const octets = hostname.split('.').map(Number);
+  if (octets.length !== 4 || octets.some((octet) => !Number.isInteger(octet) || octet < 0 || octet > 255)) return false;
+
+  return octets[0] === 10
+    || (octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31)
+    || (octets[0] === 192 && octets[1] === 168);
+};
+
+const pointsToLoopback = (() => {
+  if (!configuredApiUrl) return false;
+  try {
+    return ['localhost', '127.0.0.1', '[::1]'].includes(new URL(configuredApiUrl).hostname.toLowerCase());
+  } catch {
+    return false;
+  }
+})();
+
+const hasSecureProductionUrl = (() => {
+  if (!configuredApiUrl || pointsToLoopback) return false;
+
+  try {
+    const url = new URL(configuredApiUrl);
+    return url.protocol === 'https:'
+      || (isAndroidLanBuild && url.protocol === 'http:' && isPrivateLanIpv4(url.hostname));
+  } catch {
+    return false;
+  }
+})();
+
+export const API_BASE_URL = import.meta.env.PROD
+  ? (hasSecureProductionUrl ? configuredApiUrl : '')
+  : (configuredApiUrl || 'http://localhost:5001');
 
 // Helper function for API calls
-const apiCall = async (endpoint, options = {}) => {
-  const url = `${API_BASE_URL}${endpoint}`;
+export const apiCall = async (endpoint, options = {}) => {
+  if (!API_BASE_URL) {
+    throw new Error('Production API is not configured. Set VITE_API_URL to the reachable production API before building.');
+  }
+  const url = new URL(`${API_BASE_URL}${endpoint}`);
+  if (options.params) {
+    Object.entries(options.params).forEach(([key, value]) => {
+      if (value !== undefined && value !== null) url.searchParams.set(key, String(value));
+    });
+  }
   
   // Check if this is a file upload (FormData)
   const isFormDataUpload = options.body instanceof FormData;
   
+  const headers = isFormDataUpload
+    ? { ...options.headers }
+    : {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      };
+  if (isFormDataUpload) {
+    delete headers['Content-Type'];
+    delete headers['content-type'];
+  }
+
+  const farmerId = localStorage.getItem('farmer_id');
+  if (farmerId && !headers['x-farmer-id']) headers['x-farmer-id'] = farmerId;
+  const token = localStorage.getItem('soil2crop_token');
+  if (token && !headers.Authorization && !headers.authorization) headers.Authorization = `Bearer ${token}`;
+
   const config = {
-    headers: isFormDataUpload 
-      ? {} // Don't set Content-Type for FormData - browser will set it automatically
-      : {
-          'Content-Type': 'application/json',
-          ...options.headers,
-        },
     ...options,
+    headers, // Let the browser add the multipart boundary for FormData.
   };
+  delete config.params;
 
   try {
-    const response = await fetch(url, config);
+    const response = await fetch(url.toString(), config);
     
     // Check if response is OK before parsing
     if (!response.ok) {
@@ -56,20 +111,45 @@ const apiCall = async (endpoint, options = {}) => {
   }
 };
 
+// Axios-shaped adapter retained for existing imports. All requests share this
+// module's base URL and fetch implementation.
+const request = async (method, endpoint, data, options = {}) => ({
+  data: await apiCall(endpoint, {
+    ...options,
+    method,
+    body: data === undefined ? options.body : (data instanceof FormData ? data : JSON.stringify(data)),
+  }),
+});
+
+const api = {
+  get: (endpoint, options) => request('GET', endpoint, undefined, options),
+  post: (endpoint, data, options) => request('POST', endpoint, data, options),
+  put: (endpoint, data, options) => request('PUT', endpoint, data, options),
+  delete: (endpoint, options) => request('DELETE', endpoint, undefined, options),
+  request: (options) => request(options.method || 'GET', options.url, options.data, options),
+};
+
+export default api;
+
 // Farmer API functions
-export const loginFarmer = async ({ name, mobile, language = 'en' }) => {
-  return apiCall('/auth/login', {
+export const loginFarmer = async ({ mobile, password, language = 'en' }) => {
+  return apiCall('/api/auth/login', {
     method: 'POST',
-    body: JSON.stringify({ name, mobile, language }),
+    body: JSON.stringify({ mobile, password, language }),
   });
 };
 
+export const registerFarmer = async ({ name, mobile, password, district, language = 'en' }) => apiCall('/api/auth/register', {
+  method: 'POST',
+  body: JSON.stringify({ name, mobile, password, district, language }),
+});
+
 export const getFarmerById = async (farmerId) => {
-  return apiCall(`/farmers/${farmerId}`);
+  return apiCall(`/api/farmers/${farmerId}`);
 };
 
 export const updateFarmerLanguage = async (farmerId, language) => {
-  return apiCall(`/farmers/${farmerId}/language`, {
+  return apiCall(`/api/farmers/${farmerId}/language`, {
     method: 'PUT',
     body: JSON.stringify({ language }),
   });
@@ -84,7 +164,7 @@ export const uploadSoilReport = async (formData) => {
   }
   
   try {
-    const result = await apiCall('/soil-reports/upload', {
+    const result = await apiCall('/api/soilreport/upload', {
       method: 'POST',
       body: formData,
       headers: {}, // Remove Content-Type to let browser set multipart/form-data
@@ -99,15 +179,28 @@ export const uploadSoilReport = async (formData) => {
 };
 
 export const submitSoilData = async (soilData) => {
-  return apiCall('/soil2crop', {
+  return apiCall('/api/soilreport', {
     method: 'POST',
-    body: JSON.stringify(soilData),
+    body: JSON.stringify({
+      userId: soilData.userId,
+      reportId: soilData.reportId,
+      soilParameters: soilData.soilParameters,
+      nitrogen: soilData.nitrogen,
+      phosphorus: soilData.phosphorus,
+      potassium: soilData.potassium,
+      ph: soilData.ph,
+      soilType: soilData.soilType,
+    }),
   });
+};
+
+export const getSoilReports = async (userId) => {
+  return apiCall(`/api/reports/${userId}`);
 };
 
 // Crop Image API functions
 export const uploadCropImage = async (formData) => {
-  return apiCall('/crop-images/upload', {
+  return apiCall('/api/crop-images/upload', {
     method: 'POST',
     body: formData,
     headers: {}, // Remove Content-Type to let browser set multipart/form-data
@@ -116,23 +209,23 @@ export const uploadCropImage = async (formData) => {
 
 // Alert API functions
 export const getAlerts = async (farmerId) => {
-  return apiCall(`/alerts/${farmerId}`);
+  return apiCall(`/api/alerts/${farmerId}`);
 };
 
 export const markAlertAsRead = async (alertId) => {
-  return apiCall(`/alerts/${alertId}/read`, {
+  return apiCall(`/api/alerts/${alertId}/read`, {
     method: 'PUT',
   });
 };
 
 export const markAllAlertsAsRead = async (farmerId) => {
-  return apiCall(`/alerts/farmer/${farmerId}/read-all`, {
+  return apiCall(`/api/alerts/farmer/${farmerId}/read-all`, {
     method: 'PUT',
   });
 };
 
 export const deleteAlert = async (alertId) => {
-  return apiCall(`/alerts/${alertId}`, {
+  return apiCall(`/api/alerts/${alertId}`, {
     method: 'DELETE',
   });
 };
@@ -193,6 +286,14 @@ export const getCropRecommendation = async (soilData) => {
   return apiCall('/api/crop-recommendation', {
     method: 'POST',
     body: JSON.stringify(soilData),
+  });
+};
+
+// Existing crop-suggestion API now accepts only a saved, farmer-confirmed report.
+export const getVerifiedCropAdvice = async ({ farmerId, reportId, district }) => {
+  return apiCall('/api/crop-suggestion', {
+    method: 'POST',
+    body: JSON.stringify({ farmer_id: farmerId, reportId, district }),
   });
 };
 

@@ -1,188 +1,250 @@
 /**
- * Voice Messages Dictionary
- * Pre-translated voice messages for common farming events
- * Supports: English, Telugu, Hindi
+ * Voice Messages for Crop Recommendations
+ * Pre-formatted voice messages for different scenarios
  */
+import { speakMessage as speakWithSharedVoice, stopSpeech as stopSharedSpeech } from "./voiceAssistant";
 
-export const voiceMessages = {
-  // Soil Report Upload Success
-  soilUploadSuccess: {
-    en: 'Soil report uploaded successfully. Analyzing your soil data.',
-    te: 'మట్టి నివేదిక విజయవంతంగా అప్‌లోడ్ అయింది. మీ మట్టి డేటాను విశ్లేషిస్తున్నాము.',
-    hi: 'मिट्टी रिपोर्ट सफलतापूर्वक अपलोड हो गई। आपकी मिट्टी का विश्लेषण कर रहे हैं।'
-  },
+/**
+ * Suitability levels for crops
+ */
+export const SuitabilityLevel = {
+  HIGH: 'High',
+  MEDIUM: 'Medium',
+  LOW: 'Low'
+} as const;
 
-  // Crop Recommendation Generated
-  cropRecommendation: {
-    en: 'Based on your soil report, these crops are suitable for your farm.',
-    te: 'మీ మట్టి నివేదిక ఆధారంగా, ఈ పంటలు మీ పొలానికి అనుకూలంగా ఉంటాయి.',
-    hi: 'आपकी मिट्टी की रिपोर्ट के आधार पर, ये फसलें आपके खेत के लिए उपयुक्त हैं।'
-  },
+export type SuitabilityLevelType = typeof SuitabilityLevel[keyof typeof SuitabilityLevel];
 
-  // Specific Crop Suggestion
-  specificCropSuggestion: {
-    en: (crop) => `${crop} is recommended for your soil type.`,
-    te: (crop) => `మీ మట్టి రకానికి ${crop} సిఫార్సు చేయబడింది.`,
-    hi: (crop) => `आपकी मिट्टी के प्रकार के लिए ${crop} की सिफारिश की जाती है।`
-  },
-
-  // Alerts Opened
-  alertsOpened: {
-    en: 'Opening farming alerts and notifications.',
-    te: 'వ్యవసాయ హెచ్చరికలు మరియు నోటిఫికేషన్‌లు తెరుస్తోంది.',
-    hi: 'खेती अलर्ट और सूचनाएं खोल रहे हैं।'
-  },
-
-  // New Alert Available
-  newAlert: {
-    en: 'You have a new farming alert.',
-    te: 'మీకు కొత్త వ్యవసాయ హెచ్చరిక ఉంది.',
-    hi: 'आपके पास एक नया कृषि अलर्ट है।'
-  },
-
-  // Crop Calendar Displayed
-  cropCalendarDisplayed: {
-    en: 'Showing crop calendar with weekly farming activities.',
-    te: 'వారం వారీ వ్యవసాయ కార్యకలాపాలతో పంట క్యాలెండర్ చూపిస్తున్నాము.',
-    hi: 'साप्ताहिक खेती गतिविधियों के साथ फसल कैलेंडर दिखा रहे हैं।'
-  },
-
-  // Current Growth Stage
-  currentGrowthStage: {
-    en: (stage) => `Your crop is in ${stage} stage.`,
-    te: (stage) => `మీ పంట ${stage} దశలో ఉంది.`,
-    hi: (stage) => `आपकी फसल ${stage} चरण में है।`
-  },
-
-  // Market Price Update
-  marketPriceUpdate: {
-    en: 'Market prices updated for your crops.',
-    te: 'మీ పంటలకు మార్కెట్ ధరలు నవీకరించబడ్డాయి.',
-    hi: 'आपकी फसलों के लिए बाजार मूल्य अपडेट किए गए।'
-  },
-
-  // Price Trend Increasing
-  priceIncreasing: {
-    en: 'Prices are increasing. Consider selling after a few days.',
-    te: 'ధరలు పెరుగుతున్నాయి. కొన్ని రోజుల తర్వాత అమ్మడాన్ని పరిగణించండి.',
-    hi: 'कीमतें बढ़ रही हैं। कुछ दिनों बाद बेचने पर विचार करें।'
-  },
-
-  // Price Trend Decreasing
-  priceDecreasing: {
-    en: 'Prices are decreasing. Consider selling soon.',
-    te: 'ధరలు తగ్గుతున్నాయి. త్వరగా అమ్మడాన్ని పరిగణించండి.',
-    hi: 'कीमतें घट रही हैं। जल्दी बेचने पर विचार करें।'
-  },
-
-  // Weather Alert
-  weatherAlert: {
-    en: 'Weather alert for your region. Please check details.',
-    te: 'మీ ప్రాంతానికి వాతావరణ హెచ్చరిక. దయచేసి వివరాలు తనిఖీ చేయండి.',
-    hi: 'आपके क्षेत्र के लिए मौसम चेतावनी। कृपया विवरण जांचें।'
-  },
-
-  // Government Scheme Available
-  schemeAvailable: {
-    en: 'New government scheme available for farmers.',
-    te: 'రైతులకు కొత్త ప్రభుత్వ పథకం అందుబాటులో ఉంది.',
-    hi: 'किसानों के लिए नई सरकारी योजना उपलब्ध है।'
-  },
-
-  // Success Message
-  success: {
-    en: 'Task completed successfully.',
-    te: 'పని విజయవంతంగా పూర్తయింది.',
-    hi: 'कार्य सफलतापूर्वक पूरा हुआ।'
-  },
-
-  // Error Message
-  error: {
-    en: 'An error occurred. Please try again.',
-    te: 'లోపం సంభవించింది. దయచేసి మళ్లీ ప్రయత్నించండి.',
-    hi: 'एक त्रुटि हुई। कृपया पुनः प्रयास करें।'
-  },
-
-  // Welcome Message
-  welcome: {
-    en: 'Welcome to Soil2Crop. Your smart farming assistant.',
-    te: 'సాయిల్2క్రాప్‌కు స్వాగతం. మీ స్మార్ట్ వ్యవసాయ సహాయకుడు.',
-    hi: 'Soil2Crop में आपका स्वागत है। आपका स्मार्ट फार्मिंग सहायक।'
+/**
+ * Generate voice message for crop recommendations
+ */
+export const generateRecommendationVoiceMessage = (
+  top3Crops: Array<{
+    cropName: string;
+    suitability: string;
+    reasoning: string;
+  }>
+): string => {
+  if (!top3Crops || top3Crops.length === 0) {
+    return 'Sorry, no crop recommendations available for your soil conditions.';
   }
+
+  const cropNames = top3Crops.map(c => c.cropName);
+  
+  if (cropNames.length === 1) {
+    return `Based on your soil analysis, the recommended crop is ${cropNames[0]}.`;
+  }
+  
+  if (cropNames.length === 2) {
+    return `Based on your soil analysis, the recommended crops are ${cropNames[0]} and ${cropNames[1]}.`;
+  }
+  
+  // For 3 or more crops
+  const lastCrop = cropNames[cropNames.length - 1];
+  const otherCrops = cropNames.slice(0, -1);
+  
+  return `Based on your soil analysis, the recommended crops are ${otherCrops.join(', ')}, and ${lastCrop}.`;
 };
 
 /**
- * Get voice message for a specific event
- * @param {string} eventKey - Key from voiceMessages object
- * @param {string} language - Language code (en, te, hi)
- * @param {any} param - Optional parameter for dynamic messages
- * @returns {string} Translated message
+ * Generate detailed voice message with suitability levels
  */
-export const getVoiceMessage = (eventKey, language = 'en', param = null) => {
-  const event = voiceMessages[eventKey];
-  
-  if (!event) {
-    console.warn(`[VoiceMessages] Event "${eventKey}" not found`);
-    return '';
+export const generateDetailedVoiceMessage = (
+  top3Crops: Array<{
+    cropName: string;
+    suitability: string;
+    reasoning: string;
+  }>
+): string => {
+  if (!top3Crops || top3Crops.length === 0) {
+    return 'No recommendations available.';
   }
 
-  const message = event[language] || event.en;
-  
-  if (typeof message === 'function') {
-    return message(param);
-  }
-  
-  return message;
-};
-
-/**
- * Get all voice messages for a category
- * @param {string} category - Category prefix (e.g., 'soil', 'crop', 'market')
- * @returns {Object} Filtered messages object
- */
-export const getMessagesByCategory = (category) => {
-  const result = {};
-  
-  Object.entries(voiceMessages).forEach(([key, value]) => {
-    if (key.toLowerCase().startsWith(category.toLowerCase())) {
-      result[key] = value;
-    }
+  const messages = top3Crops.map((crop, index) => {
+    const suitabilityText = crop.suitability === SuitabilityLevel.HIGH 
+      ? 'highly suitable' 
+      : crop.suitability === SuitabilityLevel.MEDIUM 
+        ? 'moderately suitable' 
+        : 'suitable';
+    
+    return `${index + 1}. ${crop.cropName} is ${suitabilityText}. ${crop.reasoning.split('.')[0]}.`;
   });
   
-  return result;
+  return messages.join(' ');
 };
 
 /**
- * Check if a language is supported
- * @param {string} language - Language code to check
- * @returns {boolean} True if supported
+ * Generate alert voice message for soil issues
  */
-export const isLanguageSupported = (language) => {
-  const supportedLanguages = ['en', 'te', 'hi', 'ta', 'kn', 'ml', 'bn', 'mr'];
-  return supportedLanguages.includes(language);
+export const generateSoilAlertVoiceMessage = (
+  pH: number,
+  nitrogen: string,
+  phosphorus: string,
+  potassium: string
+): string => {
+  const alerts: string[] = [];
+  
+  // pH alerts
+  if (pH < 6) {
+    alerts.push('Your soil is acidic. Consider adding lime to improve pH.');
+  } else if (pH > 7.5) {
+    alerts.push('Your soil is alkaline. Consider adding organic matter to balance pH.');
+  }
+  
+  // Nitrogen alerts
+  if (nitrogen === 'Low') {
+    alerts.push('Nitrogen levels are low. Consider planting pulses or adding organic fertilizer.');
+  } else if (nitrogen === 'High') {
+    alerts.push('Nitrogen levels are high. Avoid excessive nitrogen fertilizers.');
+  }
+  
+  // Phosphorus alerts
+  if (phosphorus === 'Low') {
+    alerts.push('Phosphorus levels are low. Add bone meal or rock phosphate.');
+  }
+  
+  // Potassium alerts
+  if (potassium === 'Low') {
+    alerts.push('Potassium levels are low. Add wood ash or potash fertilizer.');
+  }
+  
+  if (alerts.length === 0) {
+    return 'Your soil parameters are within optimal range. Great job!';
+  }
+  
+  return `Soil Alert: ${alerts.join(' ')}`;
 };
 
 /**
- * Get list of supported languages
- * @returns {Array} Array of supported language codes
+ * Generate success voice message
  */
-export const getSupportedLanguages = () => {
-  return [
-    { code: 'en', name: 'English' },
-    { code: 'te', name: 'Telugu' },
-    { code: 'hi', name: 'Hindi' },
-    { code: 'ta', name: 'Tamil' },
-    { code: 'kn', name: 'Kannada' },
-    { code: 'ml', name: 'Malayalam' },
-    { code: 'bn', name: 'Bengali' },
-    { code: 'mr', name: 'Marathi' }
-  ];
+export const generateSuccessVoiceMessage = (cropCount: number): string => {
+  if (cropCount === 0) {
+    return 'No suitable crops found for your soil conditions.';
+  }
+  
+  return `Successfully analyzed your soil data and generated ${cropCount} crop recommendations.`;
 };
+
+/**
+ * Get quick summary voice message
+ */
+export const getQuickSummaryVoiceMessage = (
+  pH: number,
+  nitrogen: string,
+  topCrop: string
+): string => {
+  const pHStatus = pH < 6 ? 'acidic' : pH > 7.5 ? 'alkaline' : 'neutral';
+  
+  return `Your soil is ${pHStatus} with ${nitrogen.toLowerCase()} nitrogen. Best recommended crop: ${topCrop}.`;
+};
+
+/**
+ * Voice messages for different app states
+ */
+export const VoiceMessages = {
+  // Loading states
+  loading: 'Analyzing your soil data. Please wait...',
+  analyzing: 'Generating crop recommendations based on soil parameters...',
+  
+  // Error states
+  error: 'Sorry, unable to generate recommendations. Please check your connection and try again.',
+  noData: 'No soil data provided. Please enter soil test results.',
+  
+  // Success states
+  ready: 'Crop recommendations are ready!',
+  refreshed: 'Recommendations updated successfully.',
+  
+  // Guidance
+  instruction: 'Review the recommended crops and their suitability levels. Tap on any crop for detailed information.',
+  nextSteps: 'You can save these recommendations, share them, or explore other crop options.'
+};
+
+/**
+ * Combine multiple voice messages
+ */
+export const combineVoiceMessages = (...messages: string[]): string => {
+  return messages.filter(msg => msg && msg.trim()).join(' ');
+};
+
+/**
+ * Get voice message for crop recommendations (safe version)
+ * Handles arrays, objects, strings, and undefined values
+ * @param crops - Crop data (can be array, object, string, or undefined)
+ */
+export function getVoiceMessage(crops: any): string {
+  console.log("Voice crops value:", crops);
+
+  // If crops is empty or undefined
+  if (!crops) {
+    return "No crop recommendations available.";
+  }
+
+  // If crops is an array
+  if (Array.isArray(crops)) {
+    if (crops.length === 0) {
+      return "No crop recommendations available.";
+    }
+
+    return (
+      "Based on your soil data, the recommended crops are " +
+      crops.join(", ") +
+      "."
+    );
+  }
+
+  // If crops is an object
+  if (typeof crops === "object") {
+    const cropList =
+      crops.crops ||
+      crops.recommendedCrops ||
+      [];
+
+    if (Array.isArray(cropList)) {
+      return (
+        "Based on your soil data, the recommended crops are " +
+        cropList.join(", ") +
+        "."
+      );
+    }
+  }
+
+  // If crops is string
+  if (typeof crops === "string") {
+    return (
+      "Based on your soil data, the recommended crop is " +
+      crops +
+      "."
+    );
+  }
+
+  return "Crop recommendation available.";
+}
+
+/**
+ * Speak text using browser's Text-to-Speech API
+ * @param message - Text to speak
+ */
+export function speakText(message: string): void {
+  speakWithSharedVoice(message, "en");
+}
+
+/**
+ * Stop current speech
+ */
+export function stopSpeech(): void {
+  stopSharedSpeech();
+}
 
 export default {
-  voiceMessages,
+  generateRecommendationVoiceMessage,
+  generateDetailedVoiceMessage,
+  generateSoilAlertVoiceMessage,
+  generateSuccessVoiceMessage,
+  getQuickSummaryVoiceMessage,
+  VoiceMessages,
+  combineVoiceMessages,
   getVoiceMessage,
-  getMessagesByCategory,
-  isLanguageSupported,
-  getSupportedLanguages
+  speakText,
+  stopSpeech
 };

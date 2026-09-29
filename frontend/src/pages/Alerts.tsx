@@ -19,6 +19,8 @@ import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { getAlerts, markAlertAsRead, markAllAlertsAsRead, deleteAlert } from "@/api";
 import { useLanguage } from "@/context/LanguageContext";
+import { stopSpeech } from "@/utils/voiceAssistant";
+import { VoiceButton } from "@/components/VoiceButton";
 
 interface Alert {
   id: number;
@@ -27,36 +29,24 @@ interface Alert {
   type: 'info' | 'warning' | 'action' | 'reminder';
   is_read: number;
   created_at: string;
+  messageKey?: string;
 }
 const Alerts = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   const [isSpeaking, setIsSpeaking] = useState(false);
-  const [currentLanguage, setCurrentLanguage] = useState("en-IN");
 
-  // Load farmer's preferred language
-  useEffect(() => {
-    const savedLang = localStorage.getItem("soil2crop_language") || "en";
-    const langMap: Record<string, string> = {
-      en: "en-IN",
-      te: "te-IN",
-      hi: "hi-IN",
-      ta: "ta-IN",
-      kn: "kn-IN",
-      ml: "ml-IN"
-    };
-    setCurrentLanguage(langMap[savedLang] || "en-IN");
-  }, []);
 
   // System-generated alerts for smart farming decisions
   const systemAlerts: Alert[] = [
     {
       id: 1,
+      messageKey: "alertMockMarketPrice",
       farmer_id: 1,
       message: "Maize prices have increased by ₹200/quintal in Guntur mandi. Current average price: ₹2,000/quintal.",
       type: 'info',
@@ -65,6 +55,7 @@ const Alerts = () => {
     },
     {
       id: 2,
+      messageKey: "alertMockRainfall",
       farmer_id: 1,
       message: "Heavy rainfall expected in your region tomorrow. Ensure proper drainage in low-lying fields.",
       type: 'warning',
@@ -73,6 +64,7 @@ const Alerts = () => {
     },
     {
       id: 3,
+      messageKey: "alertMockIrrigationReminder",
       farmer_id: 1,
       message: "Your maize crop has reached the knee-high stage. Schedule irrigation within the next 2-3 days for optimal growth.",
       type: 'reminder',
@@ -81,6 +73,7 @@ const Alerts = () => {
     },
     {
       id: 4,
+      messageKey: "alertMockScheme",
       farmer_id: 1,
       message: "You are eligible for PM Kisan scheme. Income support of ₹6,000/year available. Apply at pmkisan.gov.in",
       type: 'action',
@@ -89,6 +82,7 @@ const Alerts = () => {
     },
     {
       id: 5,
+      messageKey: "alertMockMarketTrend",
       farmer_id: 1,
       message: "Market trend: Paddy prices showing upward trend in Andhra Pradesh. Consider timing your harvest accordingly.",
       type: 'info',
@@ -97,6 +91,7 @@ const Alerts = () => {
     },
     {
       id: 6,
+      messageKey: "alertMockHeat",
       farmer_id: 1,
       message: "Heat wave alert! Temperatures expected to exceed 38°C this week. Increase irrigation frequency and consider mulching.",
       type: 'warning',
@@ -138,50 +133,12 @@ const Alerts = () => {
     fetchAlerts();
   }, [fetchAlerts]);
 
-  /**
-   * Text-to-Speech for alert messages
-   * Uses Web Speech API with farmer's selected language
-   */
-  const speakAlert = useCallback((message: string) => {
-    if (!voiceEnabled || !window.speechSynthesis) return;
+  const alertText = (alert: Alert) => alert.messageKey
+    ? t[alert.messageKey as keyof typeof t]
+    : language === "en" ? alert.message : t.alertSpeechUnavailable;
 
-    // Cancel any ongoing speech
-    window.speechSynthesis.cancel();
-
-    const utterance = new SpeechSynthesisUtterance(message);
-    utterance.lang = currentLanguage;
-    utterance.rate = 0.9; // Slightly slower for clarity
-    utterance.pitch = 1;
-
-    utterance.onstart = () => setIsSpeaking(true);
-    utterance.onend = () => setIsSpeaking(false);
-    utterance.onerror = () => setIsSpeaking(false);
-
-    window.speechSynthesis.speak(utterance);
-  }, [voiceEnabled, currentLanguage]);
-
-  /**
-   * Stop speaking
-   */
-  const stopSpeaking = useCallback(() => {
-    if (window.speechSynthesis) {
-      window.speechSynthesis.cancel();
-      setIsSpeaking(false);
-    }
-  }, []);
-
-  // Speak unread alerts when page loads (if voice enabled)
-  useEffect(() => {
-    if (voiceEnabled && alerts.length > 0) {
-      const unreadAlerts = alerts.filter(a => !a.is_read);
-      if (unreadAlerts.length > 0) {
-        const message = `You have ${unreadAlerts.length} new alert${unreadAlerts.length > 1 ? 's' : ''}. ${unreadAlerts[0].message}`;
-        speakAlert(message);
-      }
-    }
-    
-    return () => stopSpeaking();
-  }, [alerts, voiceEnabled, speakAlert, stopSpeaking]);
+  // Speech starts from the farmer's Read Aloud action so the browser receives a user gesture.
+  useEffect(() => () => stopSpeech(), []);
 
   const getAlertIcon = (type: string) => {
     switch (type) {
@@ -285,7 +242,7 @@ const Alerts = () => {
                 checked={voiceEnabled}
                 onCheckedChange={(checked) => {
                   setVoiceEnabled(checked);
-                  if (!checked) stopSpeaking();
+                  if (!checked) { stopSpeech(); setIsSpeaking(false); }
                 }}
               />
             </div>
@@ -367,9 +324,8 @@ const Alerts = () => {
                       
                       <p 
                         className={`text-sm ${!alert.is_read ? 'font-medium' : 'text-muted-foreground'}`}
-                        onClick={() => speakAlert(alert.message)}
                       >
-                        {alert.message}
+                        {alertText(alert)}
                       </p>
 
                       {/* Actions */}
@@ -386,14 +342,7 @@ const Alerts = () => {
                         )}
                         
                         {voiceEnabled && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => speakAlert(alert.message)}
-                          >
-                            <Volume2 className="w-4 h-4 mr-1" />
-                            {t.readAloud || "Read aloud"}
-                          </Button>
+                          <VoiceButton language={language} size="sm" variant="ghost" message={alertText(alert)} onSpeakStart={() => setIsSpeaking(true)} onSpeakEnd={() => setIsSpeaking(false)} />
                         )}
 
                         <Button 

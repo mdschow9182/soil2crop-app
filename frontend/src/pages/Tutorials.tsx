@@ -3,8 +3,6 @@ import { useNavigate } from "react-router-dom";
 import { 
   BookOpen, 
   Play, 
-  Volume2, 
-  VolumeX, 
   ChevronDown, 
   ChevronUp,
   Upload,
@@ -20,7 +18,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useLanguage } from "@/context/LanguageContext";
-import { useToast } from "@/hooks/use-toast";
+import { VoiceButton } from "@/components/VoiceButton";
 
 interface TutorialStep {
   title: string;
@@ -43,18 +41,9 @@ interface Tutorial {
 const Tutorials = () => {
   const navigate = useNavigate();
   const { t, language } = useLanguage();
-  const { toast } = useToast();
   const [expandedTutorial, setExpandedTutorial] = useState<string | null>(null);
   const [playingVideo, setPlayingVideo] = useState<string | null>(null);
-  const [speakingTutorial, setSpeakingTutorial] = useState<string | null>(null);
-  const [speechSynthesis, setSpeechSynthesis] = useState<SpeechSynthesis | null>(null);
 
-  // Initialize speech synthesis
-  useState(() => {
-    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      setSpeechSynthesis(window.speechSynthesis);
-    }
-  });
 
   // Tutorial data with multi-language support
   const tutorials: Tutorial[] = [
@@ -98,7 +87,6 @@ const Tutorials = () => {
           icon: ArrowRight
         }
       ],
-      videoUrl: "https://www.youtube.com/embed/dQw4w9WgXcQ" // Replace with actual tutorial video
     },
     {
       id: "view-crop-recommendations",
@@ -266,76 +254,11 @@ const Tutorials = () => {
     }
   ];
 
-  // Text-to-speech function
-  const speakTutorial = (tutorial: Tutorial) => {
-    if (!speechSynthesis) {
-      toast({
-        title: "Voice Not Available",
-        description: "Text-to-speech is not supported in your browser",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (speakingTutorial === tutorial.id) {
-      // Stop speaking
-      speechSynthesis.cancel();
-      setSpeakingTutorial(null);
-      return;
-    }
-
-    // Stop any current speech
-    speechSynthesis.cancel();
-
-    // Create speech text
-    let speechText = `${tutorial.title}. `;
-    tutorial.steps.forEach((step, index) => {
-      speechText += `Step ${index + 1}: ${step.title}. ${step.description}. `;
-    });
-
-    const utterance = new SpeechSynthesisUtterance(speechText);
-    
-    // Set language based on selected language
-    const langMap: Record<string, string> = {
-      en: 'en-US',
-      hi: 'hi-IN',
-      te: 'te-IN',
-      ta: 'ta-IN',
-      kn: 'kn-IN',
-      ml: 'ml-IN'
-    };
-    utterance.lang = langMap[language] || 'en-US';
-    utterance.rate = 0.9; // Slightly slower for clarity
-    utterance.pitch = 1.0;
-
-    utterance.onend = () => {
-      setSpeakingTutorial(null);
-    };
-
-    utterance.onerror = (event) => {
-      console.error("Speech synthesis error:", event);
-      setSpeakingTutorial(null);
-    };
-
-    setSpeakingTutorial(tutorial.id);
-    speechSynthesis.speak(utterance);
-
-    toast({
-      title: "Voice Narration Started",
-      description: "Listening to tutorial...",
-    });
-  };
-
   const toggleTutorial = (id: string) => {
     setExpandedTutorial(expandedTutorial === id ? null : id);
     // Stop any playing video when collapsing
     if (expandedTutorial === id) {
       setPlayingVideo(null);
-    }
-    // Stop speech when collapsing
-    if (speakingTutorial && expandedTutorial === id) {
-      speechSynthesis?.cancel();
-      setSpeakingTutorial(null);
     }
   };
 
@@ -368,7 +291,6 @@ const Tutorials = () => {
         {tutorials.map((tutorial) => {
           const Icon = tutorial.icon;
           const isExpanded = expandedTutorial === tutorial.id;
-          const isSpeaking = speakingTutorial === tutorial.id;
           const isPlaying = playingVideo === tutorial.id;
 
           return (
@@ -437,27 +359,15 @@ const Tutorials = () => {
                         )}
                       </Button>
                     )}
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        speakTutorial(tutorial);
-                      }}
-                      className="flex-1"
-                    >
-                      {isSpeaking ? (
-                        <>
-                          <VolumeX className="w-4 h-4 mr-2" />
-                          Stop Voice
-                        </>
-                      ) : (
-                        <>
-                          <Volume2 className="w-4 h-4 mr-2" />
-                          Listen
-                        </>
-                      )}
-                    </Button>
+                    <span className="flex-1" onClick={(event) => event.stopPropagation()}>
+                      <VoiceButton
+                        language={language}
+                        variant="outline"
+                        size="sm"
+                        className="w-full"
+                        message={`${tutorial.title}. ${tutorial.description}. ${tutorial.steps.map((step, index) => `Step ${index + 1}: ${step.title}. ${step.description}.`).join(" ")}`}
+                      />
+                    </span>
                   </div>
 
                   {/* Video Player */}

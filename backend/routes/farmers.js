@@ -1,56 +1,67 @@
-/**
- * Farmer Routes
- * All farmer-related API endpoints
- */
-
-const express = require('express');
+const express = require("express");
 const router = express.Router();
-const farmerController = require('../controllers/farmerController');
-const { validateId } = require('../middleware/validation');
+const User = require("../models/User");
 
-/**
- * @route   GET /api/farmers
- * @desc    Get all farmers (for admin)
- * @access  Public
- */
-router.get('/', async (req, res) => {
-  await farmerController.getAllFarmers(req, res);
-});
+// GET /api/farmers/:id - Get farmer by ID (auto-create if not found)
+router.get("/:id", async (req, res) => {
 
-/**
- * @route   GET /api/farmers/stats
- * @desc    Get farmer statistics
- * @access  Public
- */
-router.get('/stats', async (req, res) => {
-  await farmerController.getFarmerStats(req, res);
-});
+  try {
 
-/**
- * @route   GET /api/farmers/:id
- * @desc    Get farmer by ID
- * @access  Public
- */
-router.get('/:id', validateId('id'), async (req, res) => {
-  await farmerController.getFarmer(req, res);
-});
+    const farmerId = req.params.id;
 
-/**
- * @route   POST /api/farmers/login
- * @desc    Login or register a farmer
- * @access  Public
- */
-router.post('/login', async (req, res) => {
-  await farmerController.loginOrRegister(req, res);
-});
+    console.log("Fetching farmer:", farmerId);
 
-/**
- * @route   PUT /api/farmers/:id/language
- * @desc    Update farmer's language preference
- * @access  Public
- */
-router.put('/:id/language', validateId('id'), async (req, res) => {
-  await farmerController.updateLanguage(req, res);
+    let farmer = await User.findById(farmerId);
+
+    // 🔥 AUTO CREATE FARMER IF NOT FOUND
+    if (!farmer) {
+
+      console.log("Farmer not found — creating default farmer");
+
+      farmer = new User({
+
+        _id: farmerId,
+
+        name: "Default Farmer",
+
+        mobile: "9999999999",
+
+        district: "Guntur",
+
+        language: "en"
+
+      });
+
+      await farmer.save();
+
+      console.log("Default farmer created:", farmerId);
+
+    }
+
+    res.json({
+
+      success: true,
+
+      data: farmer
+
+    });
+
+  }
+
+  catch (error) {
+
+    console.error("Farmer route error:", error);
+
+    res.status(500).json({
+
+      success: false,
+
+      message: "Server error"
+
+    });
+
+  }
+
 });
 
 module.exports = router;

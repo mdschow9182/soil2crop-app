@@ -7,6 +7,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { getSchemeRecommendations } from "@/api";
 import { useLanguage } from "@/context/LanguageContext";
 import { useToast } from "@/hooks/use-toast";
+import { VoiceButton } from "@/components/VoiceButton";
 
 interface Scheme {
   name: string;
@@ -18,7 +19,7 @@ interface Scheme {
 
 const GovernmentDashboard = () => {
   const navigate = useNavigate();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const { toast } = useToast();
   const [schemes, setSchemes] = useState<Scheme[]>([]);
   const [loading, setLoading] = useState(true);
@@ -92,14 +93,14 @@ const GovernmentDashboard = () => {
         name: "Paramparagat Krishi Vikas Yojana",
         benefit: "Support for organic farming practices",
         eligibility: "Groups of farmers forming clusters",
-        link: "#",
+        link: "https://pgsindia-ncof.gov.in",
         category: "Organic Farming"
       },
       {
         name: "Pradhan Mantri Krishi Sinchai Yojana",
         benefit: "Irrigation facilities and water conservation",
         eligibility: "All farmers",
-        link: "#",
+        link: "https://pmksy.gov.in",
         category: "Irrigation"
       }
     ];
@@ -222,6 +223,7 @@ const GovernmentDashboard = () => {
                     <p className="text-sm font-medium text-foreground">{t.eligibility || "Eligibility"}:</p>
                     <p className="text-sm text-muted-foreground">{scheme.eligibility}</p>
                   </div>
+                  <VoiceButton language={language} variant="outline" message={`${scheme.name}. ${t.benefits || "Benefits"}: ${scheme.benefit}. ${t.eligibility || "Eligibility"}: ${scheme.eligibility}.`} />
                   <Button
                     variant="outline"
                     className="w-full"

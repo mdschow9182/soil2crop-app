@@ -5,17 +5,31 @@ const dotenv = require('dotenv');
 // Load environment variables
 dotenv.config();
 
-// Database connection
-const { connectDB, getConnectionInfo } = require('./config/database');
+// Check if using memory database mode (fallback when MongoDB unavailable)
+const useMemoryDB = process.env.USE_MEMORY_DB === "true";
+
+if (useMemoryDB) {
+  console.log('=================================');
+  console.log('⚠️  RUNNING IN MEMORY DATABASE MODE');
+  console.log('MongoDB connection disabled');
+  console.log('Data will be stored temporarily in RAM');
+  console.log('=================================');
+} else {
+  // Database connection
+  const { connectDB, getConnectionInfo } = require('./config/database');
+  
+  // Connect to MongoDB
+  connectDB();
+}
 
 // Routes
 const apiRoutes = require('./src/routes/api');
 
+// IoT Routes
+const iotRoutes = require('./routes/iotRoutes');
+
 // Initialize Express
 const app = express();
-
-// Connect to MongoDB
-connectDB();
 
 // Middleware
 app.use(express.json());
@@ -50,6 +64,20 @@ app.get('/health', (req, res) => {
 // MONGODB CONNECTION TEST ENDPOINT
 // ============================================
 app.get('/api/test-db', (req, res) => {
+  if (useMemoryDB) {
+    return res.json({
+      success: true,
+      timestamp: new Date().toISOString(),
+      database: {
+        mode: 'MEMORY_DB',
+        status: 'active',
+        readyState: 'N/A - Memory Mode',
+        isConnected: true
+      },
+      message: 'Running in memory database mode - no MongoDB connection'
+    });
+  }
+  
   const connectionInfo = getConnectionInfo();
   
   // Return connection status
@@ -75,6 +103,13 @@ app.get('/api/test-db', (req, res) => {
 
 // Simple DB status check (for load balancers)
 app.get('/api/db-status', (req, res) => {
+  if (useMemoryDB) {
+    return res.status(200).json({ 
+      status: 'memory-mode', 
+      mode: 'in-memory database' 
+    });
+  }
+  
   const info = getConnectionInfo();
   
   if (info.isConnected) {
@@ -86,6 +121,10 @@ app.get('/api/db-status', (req, res) => {
 
 // API Routes
 app.use('/api', apiRoutes);
+
+// IoT Routes (must be mounted after main API routes)
+app.use('/api/iot', iotRoutes);
+console.log('[IoT] IoT routes mounted at /api/iot');
 
 // 404 Handler
 app.use((req, res) => {
@@ -117,3 +156,5 @@ app.listen(PORT, () => {
 });
 
 module.exports = app;
+
+

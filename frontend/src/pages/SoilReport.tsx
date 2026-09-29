@@ -1,6 +1,6 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Sprout, Upload, FlaskConical, ArrowRight, FileText, RotateCcw, Loader2, Volume2 } from "lucide-react";
+import { Sprout, Upload, FlaskConical, ArrowRight, FileText, RotateCcw, Loader2, Camera } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -16,18 +16,59 @@ import {
 } from "@/components/ui/select";
 
 import { useLanguage } from "@/context/LanguageContext";
-import { submitSoilData, uploadSoilReport } from "@/api";
+import { translate } from "@/i18n/translations";
+import { getSoilReports, submitSoilData, uploadSoilReport } from "@/api";
 import { useToast } from "@/hooks/use-toast";
-import { speakMessage, isSpeechSupported } from "@/utils/voiceAssistant";
-import { getVoiceMessage } from "@/utils/voiceMessages";
-import { VoiceDebug } from "@/components/VoiceDebug";
+import { VoiceButton } from "@/components/VoiceButton";
+
+const SOIL_PARAMETER_LABELS: Record<string, string> = {
+  ph: "pH", electricalConductivity: "Electrical Conductivity", organicCarbon: "Organic Carbon",
+  nitrogen: "Nitrogen", phosphorus: "Phosphorus", potassium: "Potassium", sulphur: "Sulphur",
+  zinc: "Zinc", iron: "Iron", manganese: "Manganese", copper: "Copper", boron: "Boron",
+};
+
+type RecentSoilReport = {
+  reportId?: string;
+  fileName?: string | null;
+  reportDate?: string | null;
+  createdAt?: string | null;
+  extractionStatus?: string | null;
+  soilType?: string | null;
+  ph?: number | null;
+};
 
 const SoilReport = () => {
   const navigate = useNavigate();
   const { t, language } = useLanguage();
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const speechSupported = isSpeechSupported();
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+
+  const formatParsingNote = (note: string) => {
+    if (language === "en") return note;
+    if (note === "Only the first 8 pages were processed") return t.soilNoteOnlyFirstPages;
+    if (note === "No readable text was found. Enter soil values manually.") return t.soilNoteNoReadableText;
+    if (note === "No soil parameters were detected. Enter values manually.") return t.soilNoteNoParameters;
+
+    const match = note.match(/^([^:]+?)(?::\s*(.*)|\s+was not found in the report)$/);
+    if (!match) return `${t.soilNoteUntranslated} ${note}`;
+    const englishLabel = match[1].trim();
+    const parameterKey = Object.entries(SOIL_PARAMETER_LABELS).find(([, label]) => label.toLowerCase() === englishLabel.toLowerCase())?.[0];
+    if (!parameterKey) return `${t.soilNoteUntranslated} ${note}`;
+    const parameter = translate(language, `parameter_${parameterKey}`);
+    const detail = match[2];
+    if (!detail) return t.soilNoteParameterMissing.replace("{parameter}", parameter);
+
+    let detailMatch = detail.match(/^Value is outside the accepted range \(([-+\d.]+)[–-]([-+\d.]+)\)$/i);
+    if (detailMatch) return t.soilNoteOutsideRange.replace("{parameter}", parameter).replace("{minimum}", detailMatch[1]).replace("{maximum}", detailMatch[2]);
+    if (/^Value is unusual and should be checked against the report$/i.test(detail)) return t.soilNoteUnusual.replace("{parameter}", parameter);
+    if (/^Unit was not found; please verify it$/i.test(detail)) return t.soilNoteUnitMissing.replace("{parameter}", parameter);
+    detailMatch = detail.match(/^Unit ["“](.*?)["”] is not recognized for .+$/i);
+    if (detailMatch) return t.soilNoteUnitUnknown.replace("{parameter}", parameter).replace("{unit}", detailMatch[1]);
+    if (/^Extraction confidence is low; please verify this value$/i.test(detail)) return t.soilNoteConfidenceLow.replace("{parameter}", parameter);
+    if (/^Value is not a valid number$/i.test(detail)) return t.soilNoteInvalidNumber.replace("{parameter}", parameter);
+    return `${t.soilNoteUntranslated} ${note}`;
+  };
 
   // Strict mode: "upload" or "manual" or null
   const [inputMode, setInputMode] = useState<"upload" | "manual" | null>(null);
@@ -40,10 +81,33 @@ const SoilReport = () => {
   
   // Manual input state
   const [ph, setPh] = useState("");
-  const [soilType, setSoilType] = useState("Loamy");
+  const [soilType, setSoilType] = useState("Unknown");
   const [nitrogen, setNitrogen] = useState("");
   const [phosphorus, setPhosphorus] = useState("");
   const [potassium, setPotassium] = useState("");
+  const [reviewReport, setReviewReport] = useState<any>(null);
+  const [reviewValues, setReviewValues] = useState<Record<string, { value: string; unit: string; source?: string; status?: string }>>({});
+  const [recentReports, setRecentReports] = useState<RecentSoilReport[]>([]);
+  const [reportsLoading, setReportsLoading] = useState(true);
+  const [reportsError, setReportsError] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const farmerId = localStorage.getItem("farmerId") || localStorage.getItem("farmer_id");
+    if (!farmerId) {
+      setReportsLoading(false);
+      return () => { cancelled = true; };
+    }
+    getSoilReports(farmerId)
+      .then((result) => {
+        if (cancelled) return;
+        setRecentReports(Array.isArray(result.data) ? result.data : []);
+        setReportsError(result.success === false);
+      })
+      .catch(() => { if (!cancelled) setReportsError(true); })
+      .finally(() => { if (!cancelled) setReportsLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -77,7 +141,8 @@ const SoilReport = () => {
   };
 
   const handleFileUpload = async (file: File) => {
-    const farmerId = localStorage.getItem("farmer_id");
+    // Use farmerId (MongoDB _id) for API calls
+    const farmerId = localStorage.getItem("farmerId");
     if (!farmerId) {
       toast({ title: "Error", description: "Not logged in", variant: "destructive" });
       navigate("/");
@@ -90,7 +155,7 @@ const SoilReport = () => {
       
       const formData = new FormData();
       formData.append("soil_report", file);
-      formData.append("farmer_id", farmerId);
+      formData.append("farmer_id", farmerId); // Send MongoDB _id
 
       console.log("[SoilReport] FormData prepared, sending to API");
       const result = await uploadSoilReport(formData);
@@ -105,13 +170,13 @@ const SoilReport = () => {
         throw new Error(result.message || "Upload failed");
       }
 
-      // Always show the input form (prefilled or empty)
       setInputMode("manual");
-
-      // Check if values were extracted (might be empty dict for images)
-      const ext = result.data?.extracted_values || {};
-      const notes = result.data?.parsing_notes || [];
-      const extractedCount = Object.values(ext).filter(v => v !== null && v !== undefined).length;
+      const report = result.report || {};
+      const ext = report.parameters || {};
+      const notes = report.parsingNotes || report.parsing_notes || [];
+      setReviewReport(report);
+      setReviewValues(Object.fromEntries(Object.entries(ext).map(([key, item]: [string, any]) => [key, { value: item.value == null ? "" : String(item.value), unit: item.unit || "", source: item.source, status: item.status }])));
+      const extractedCount = Object.values(ext).filter((item: any) => item?.value !== null && item?.value !== undefined).length;
       
       console.log("[SoilReport] Extracted values:", ext);
       console.log("[SoilReport] Parsing notes:", notes);
@@ -121,34 +186,23 @@ const SoilReport = () => {
 
       if (extractedCount > 0) {
         // Values were extracted from PDF - prefill the form
-        if (ext.ph) setPh(ext.ph.toString());
-        if (ext.soil_type) setSoilType(ext.soil_type);
-        if (ext.nitrogen) setNitrogen(ext.nitrogen.toString());
-        if (ext.phosphorus) setPhosphorus(ext.phosphorus.toString());
-        if (ext.potassium) setPotassium(ext.potassium.toString());
+        if (ext.ph?.value != null) setPh(String(ext.ph.value));
+        if (ext.nitrogen?.value != null) setNitrogen(String(ext.nitrogen.value));
+        if (ext.phosphorus?.value != null) setPhosphorus(String(ext.phosphorus.value));
+        if (ext.potassium?.value != null) setPotassium(String(ext.potassium.value));
         
-        const successMsg = getVoiceMessage(language, 'uploadSuccess');
         toast({
-          title: "✓ Extraction successful",
-          description: `${extractedCount} value(s) extracted. Review and modify as needed.`,
+          title: t.extractionSuccess,
+          description: `${extractedCount} ${t.valuesExtracted}`,
         });
         
-        // Speak success message
-        if (speechSupported) {
-          speakMessage(successMsg, language);
-        }
       } else {
         // No values extracted (scanned PDF, image, or empty PDF)
-        const manualMsg = getVoiceMessage(language, 'analysisStarted');
         toast({
-          title: "⚠️ Manual entry required",
-          description: "No values could be extracted. Please enter manually.",
+          title: t.manualRequired,
+          description: t.noValues,
         });
         
-        // Speak message
-        if (speechSupported) {
-          speakMessage(manualMsg, language);
-        }
       }
     } catch (error) {
       console.error("[SoilReport] Upload error:", error);
@@ -164,24 +218,39 @@ const SoilReport = () => {
   };
 
   const handleAnalyze = async () => {
-    const farmerId = localStorage.getItem("farmer_id");
+    const farmerId = reviewReport?.userId || localStorage.getItem("farmer_id") || localStorage.getItem("farmerId");
     if (!farmerId) {
       toast({ title: "Error", description: "Not logged in", variant: "destructive" });
       navigate("/");
       return;
     }
 
-    if (!ph.trim() || !soilType.trim()) {
-      toast({
-        title: "Missing data",
-        description: "pH and Soil Type are required",
-        variant: "destructive",
-      });
+    if (reviewReport?.reportId) {
+      const soilParameters = Object.fromEntries(Object.entries(reviewValues).map(([key, item]) => [key, {
+        value: item.value.trim() === "" ? null : Number(item.value), unit: item.unit || null,
+        status: item.source && item.value.trim() !== "" ? "extracted" : "manually_entered",
+        originalText: item.source ? undefined : null,
+      }]));
+      if (Object.values(soilParameters).some((item: any) => item.value !== null && !Number.isFinite(item.value))) {
+        toast({ title: "Invalid value", description: "Use a number or leave the field empty.", variant: "destructive" });
+        return;
+      }
+      setIsAnalyzing(true);
+      try {
+        const response = await submitSoilData({ userId: farmerId, reportId: reviewReport.reportId, soilParameters, soilType });
+        if (!response.success) throw new Error(response.message || "Could not save verified values");
+        toast({ title: "Soil values saved", description: "Your reviewed values are now recorded." });
+        setReviewReport(null);
+        localStorage.setItem("selectedSoilReportId", response.report?.reportId || reviewReport.reportId);
+        navigate("/crop-suggestion", { state: { reportId: response.report?.reportId || reviewReport.reportId, ...Object.fromEntries(Object.entries(soilParameters).map(([key, item]: [string, any]) => [key, item.value])), soilType, apiResponse: response } });
+      } catch (error) {
+        toast({ title: "Save failed", description: error instanceof Error ? error.message : "Please try again", variant: "destructive" });
+      } finally { setIsAnalyzing(false); }
       return;
     }
 
-    const phNum = parseFloat(ph);
-    if (isNaN(phNum) || phNum < 0 || phNum > 14) {
+    const phNum = ph.trim() ? parseFloat(ph) : null;
+    if (ph.trim() && (phNum === null || isNaN(phNum) || phNum < 0 || phNum > 14)) {
       toast({
         title: "Invalid pH",
         description: "Must be 0–14",
@@ -192,23 +261,25 @@ const SoilReport = () => {
 
     setIsAnalyzing(true);
     try {
-      const payload: any = {
-        farmer_id: farmerId,
-        soilType: soilType.trim(),
-        pH: phNum,
+      const soilData = {
+        userId: farmerId,
+        nitrogen: nitrogen.trim() ? Number(nitrogen) : null,
+        phosphorus: phosphorus.trim() ? Number(phosphorus) : null,
+        potassium: potassium.trim() ? Number(potassium) : null,
+        ph: phNum,
+        soilType,
       };
-      
-      if (nitrogen.trim()) payload.nitrogen = parseFloat(nitrogen);
-      if (phosphorus.trim()) payload.phosphorus = parseFloat(phosphorus);
-      if (potassium.trim()) payload.potassium = parseFloat(potassium);
 
-      console.log("[SoilReport] Submitting soil data:", payload);
+      console.log("[SoilReport] Submitting soil data:", soilData);
 
-      const response = await submitSoilData(payload);
+      const response = await submitSoilData(soilData);
 
       if (response.success) {
+        const reportId = response.report?.reportId;
+        if (reportId) localStorage.setItem("selectedSoilReportId", reportId);
         navigate("/crop-suggestion", {
           state: {
+            reportId,
             ph,
             soilType,
             nitrogen,
@@ -239,12 +310,15 @@ const SoilReport = () => {
     setInputMode(null);
     setUploadedFile(null);
     setUploadNotes([]);
+    setReviewReport(null);
+    setReviewValues({});
     setPh("");
-    setSoilType("Loamy");
+    setSoilType("Unknown");
     setNitrogen("");
     setPhosphorus("");
     setPotassium("");
     if (fileInputRef.current) fileInputRef.current.value = "";
+    if (cameraInputRef.current) cameraInputRef.current.value = "";
   };
 
   return (
@@ -259,9 +333,11 @@ const SoilReport = () => {
         </div>
       </header>
 
-      <main className="container max-w-3xl mx-auto px-4 py-8 space-y-6">
-        {/* Voice Debug Component */}
-        <VoiceDebug />
+      <main className="container mx-auto max-w-3xl space-y-5 px-3 py-4 sm:space-y-6 sm:px-6 sm:py-8">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-card p-3">
+          <p className="text-sm font-medium">{t.chooseMethod}</p>
+          <VoiceButton language={language} message={`${t.uploadSoil}. ${t.chooseMethod}. ${t.uploadReport}. ${t.manualEntry}.`} />
+        </div>
 
         {/* Mode selector (if no mode chosen yet) */}
         {!inputMode && (
@@ -306,26 +382,25 @@ const SoilReport = () => {
                       setUploadedFile(null);
                       setPh("");
                       if (fileInputRef.current) fileInputRef.current.value = "";
+                      if (cameraInputRef.current) cameraInputRef.current.value = "";
                     }}
-                    className="text-xs text-muted-foreground hover:text-foreground"
+                    className="inline-flex min-h-11 items-center rounded-md px-3 text-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     {t.remove}
                   </button>
                 </div>
               ) : (
-                <label className="rounded-lg border-2 border-dashed p-6 text-center cursor-pointer hover:bg-primary/5">
-                  <input
-                    type="file"
-                    ref={fileInputRef}
-                    onChange={handleFileSelect}
-                    accept=".pdf,.jpg,.jpeg,.png"
-                    className="hidden"
-                    disabled={isUploading}
-                  />
-                  <Upload className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
-                  <p className="text-sm font-medium">{t.clickUpload}</p>
-                  <p className="text-xs text-muted-foreground">{t.maxSize}</p>
-                </label>
+                <div className="grid grid-cols-1 gap-3 min-[380px]:grid-cols-2">
+                  <input ref={cameraInputRef} type="file" accept="image/jpeg,image/png" capture="environment" onChange={handleFileSelect} className="sr-only" aria-label={t.takePhoto} disabled={isUploading} />
+                  <input ref={fileInputRef} type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={handleFileSelect} className="sr-only" aria-label={t.chooseFile} disabled={isUploading} />
+                  <Button type="button" variant="outline" className="h-12 w-full" onClick={() => cameraInputRef.current?.click()} disabled={isUploading}>
+                    <Camera className="mr-2 h-5 w-5" />{t.takePhoto}
+                  </Button>
+                  <Button type="button" variant="outline" className="h-12 w-full" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>
+                    <Upload className="mr-2 h-5 w-5" />{t.chooseFile}
+                  </Button>
+                  <p className="text-center text-xs text-muted-foreground min-[380px]:col-span-2">{t.maxSize}</p>
+                </div>
               )}
               {isUploading && <p className="text-sm text-muted-foreground">{t.uploading}</p>}
             </CardContent>
@@ -342,6 +417,21 @@ const SoilReport = () => {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
+              {reviewReport?.reportId && <div className="space-y-3">
+                <Alert><AlertDescription>Review every extracted value. Values remain unverified until you save this review. Empty values stay missing.</AlertDescription></Alert>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {Object.entries(SOIL_PARAMETER_LABELS).map(([key, fallbackLabel]) => {
+                    const label = translate(language, `parameter_${key}`) || fallbackLabel;
+                    return <div key={key}>
+                    <Label>{label} {reviewValues[key]?.status === "needs_review" ? t.needsReview : ""}</Label>
+                    <div className="flex gap-2">
+                      <Input type="number" step="any" value={reviewValues[key]?.value ?? ""} placeholder={t.notAvailable} onChange={(e) => setReviewValues((current) => ({ ...current, [key]: { ...current[key], value: e.target.value, source: undefined } }))} />
+                      <Input aria-label={`${label} unit`} value={reviewValues[key]?.unit ?? ""} placeholder="Unit" className="max-w-28" onChange={(e) => setReviewValues((current) => ({ ...current, [key]: { ...current[key], unit: e.target.value, source: undefined } }))} />
+                    </div>
+                  </div>;
+                  })}
+                </div>
+              </div>}
               {/* Display parsing notes if any */}
               {uploadNotes.length > 0 && (
                 <Alert className="bg-amber-50 border-amber-200">
@@ -376,6 +466,7 @@ const SoilReport = () => {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="Unknown">{t.notAvailable}</SelectItem>
                     <SelectItem value="Sandy">{t.sandy}</SelectItem>
                     <SelectItem value="Loamy">{t.loamy}</SelectItem>
                     <SelectItem value="Clay">{t.clay}</SelectItem>
@@ -383,7 +474,7 @@ const SoilReport = () => {
                 </Select>
               </div>
 
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-1 gap-2 min-[380px]:grid-cols-3">
                 <div>
                   <Label className="text-xs">{t.nLabel}</Label>
                   <Input
@@ -422,7 +513,7 @@ const SoilReport = () => {
             <Button
               onClick={handleAnalyze}
               className="flex-1"
-              disabled={isUploading || isAnalyzing || !ph || !soilType}
+              disabled={isUploading || isAnalyzing || (!reviewReport && !soilType)}
             >
               {isAnalyzing ? (
                 <>
@@ -444,6 +535,37 @@ const SoilReport = () => {
             </Button>
           </div>
         )}
+
+        <Card>
+          <CardHeader><CardTitle>{t.recentReports}</CardTitle></CardHeader>
+          <CardContent className="space-y-2">
+            {reportsLoading ? <p role="status" className="text-sm text-muted-foreground">{t.loading}</p>
+              : reportsError ? <p role="status" className="text-sm text-destructive">{t.reportsLoadFailed}</p>
+                : recentReports.length === 0 ? <p className="text-sm text-muted-foreground">{t.noReportsYet}</p>
+                  : recentReports.slice(0, 5).map((report, index) => {
+                    const verified = report.extractionStatus === "verified";
+                    const dateValue = report.reportDate || report.createdAt;
+                    const date = dateValue && !Number.isNaN(Date.parse(dateValue)) ? new Date(dateValue).toLocaleDateString() : "";
+                    return <button
+                      key={report.reportId || `${date}-${index}`}
+                      type="button"
+                      disabled={!verified || !report.reportId}
+                      onClick={() => {
+                        if (!report.reportId) return;
+                        localStorage.setItem("selectedSoilReportId", report.reportId);
+                        navigate("/crop-suggestion", { state: { reportId: report.reportId } });
+                      }}
+                      className="flex min-h-16 w-full items-center justify-between gap-3 rounded-lg border bg-background px-3 py-2 text-left disabled:cursor-default disabled:opacity-70 enabled:hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <span className="min-w-0">
+                        <span className="block break-words text-sm font-medium">{report.fileName || report.reportId || t.uploadSoilReport}</span>
+                        <span className="block text-xs text-muted-foreground">{[date, report.soilType, report.ph != null ? `pH ${report.ph}` : ""].filter(Boolean).join(" · ")}</span>
+                      </span>
+                      <span className="shrink-0 text-xs font-medium text-muted-foreground">{report.extractionStatus || t.notAvailable}</span>
+                    </button>;
+                  })}
+          </CardContent>
+        </Card>
 
         <Alert>
           <AlertDescription>

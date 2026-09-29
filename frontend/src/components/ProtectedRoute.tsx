@@ -6,8 +6,8 @@ interface Props {
 }
 
 const ProtectedRoute = ({ children }: Props) => {
-  const farmerId = localStorage.getItem("farmer_id");
-  if (!farmerId) {
+  const token = localStorage.getItem("soil2crop_token");
+  if (!token) {
     return <Navigate to="/" replace />;
   }
   return children;

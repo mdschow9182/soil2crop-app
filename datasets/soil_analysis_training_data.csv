@@ -1,0 +1,41 @@
+sample_id,nitrogen,phosphorus,potassium,ph,district,soil_type,recommended_crop,confidence_score,yield_prediction_kg_ha
+1,120,25,140,6.5,Guntur,Loamy,Rice,0.92,4500
+2,85,30,95,6.8,Anantapur,Sandy,Wheat,0.88,3200
+3,70,18,75,7.2,Kurnool,Sandy,Cotton,0.85,1800
+4,140,35,160,6.2,Chittoor,Loamy,Maize,0.90,5500
+5,180,40,180,6.8,East Godavari,Clay,Sugarcane,0.94,9500
+6,35,28,50,6.5,Prakasam,Sandy,Groundnut,0.87,1500
+7,45,32,65,6.8,West Godavari,Loamy,Soybean,0.86,2200
+8,30,20,45,7.0,Nellore,Loamy,Chickpea,0.84,1300
+9,90,22,110,6.5,Krishna,Loamy,Rice,0.89,4200
+10,75,25,85,6.5,Cuddapah,Sandy,Millet,0.83,1600
+11,110,30,130,6.0,Vizianagaram,Loamy,Pigeon Pea,0.86,1400
+12,65,18,70,7.5,Srikakulam,Sandy,Barley,0.82,2700
+13,50,15,55,6.8,Kakinada,Loamy,Sorghum,0.81,2100
+14,80,25,90,6.5,Tirupati,Loamy,Rape Seed,0.85,1350
+15,55,22,60,7.0,Machilipatnam,Sandy,Sunflower,0.83,1700
+16,40,18,45,6.8,Ongole,Sandy,Sesame,0.80,900
+17,60,25,70,6.5,Eluru,Loamy,Castor,0.84,1150
+18,95,28,105,6.0,Nandyal,Sandy,Tobacco,0.87,1650
+19,125,32,135,6.5,Markapur,Loamy,Chillies,0.88,1150
+20,150,38,145,6.2,Srisailam,Loamy,Turmeric,0.91,2400
+21,105,30,115,6.0,Bhimavaram,Sandy,Ginger,0.86,1750
+22,130,28,150,6.5,Guntur,Loamy,Rice,0.91,4600
+23,88,32,98,6.8,Anantapur,Sandy,Wheat,0.87,3100
+24,72,20,78,7.0,Kurnool,Sandy,Cotton,0.84,1750
+25,145,38,165,6.0,Chittoor,Loamy,Maize,0.89,5400
+26,185,42,185,6.5,East Godavari,Clay,Sugarcane,0.93,9600
+27,38,30,52,6.8,Prakasam,Sandy,Groundnut,0.86,1450
+28,48,34,68,6.5,West Godavari,Loamy,Soybean,0.85,2150
+29,32,22,48,7.2,Nellore,Loamy,Chickpea,0.83,1250
+30,92,24,112,6.8,Krishna,Loamy,Rice,0.88,4100
+31,100,180,15,40,100,200,5.5,7.5,High,True,Low,25,120,"Loamy,Clay",Rice,0.90
+32,80,150,20,45,80,160,6.0,7.5,Medium,False,Low,30,140,"Loamy,Sandy",Wheat,0.88
+33,60,120,15,35,60,120,6.0,8.0,Medium,False,High,15,180,"Sandy,Loamy",Cotton,0.85
+34,100,180,20,40,80,150,5.8,7.0,Medium,True,Medium,40,100,"Loamy,Sandy",Maize,0.89
+35,120,250,25,50,100,200,6.0,7.5,High,True,Low,80,300,"Loamy,Clay",Sugarcane,0.93
+36,20,60,20,45,30,80,6.0,7.5,Low,False,Medium,12,110,"Sandy,Loamy",Groundnut,0.86
+37,20,80,20,40,40,100,6.0,7.5,Medium,True,Medium,18,100,"Loamy,Clay",Soybean,0.85
+38,20,60,15,35,30,80,6.0,8.0,Low,False,Low,10,100,"Loamy,Sandy",Chickpea,0.83
+39,110,200,18,42,105,205,5.6,7.4,High,True,Low,26,122,"Loamy,Clay",Rice,0.91
+40,82,152,21,46,82,162,6.1,7.4,Medium,False,Low,31,142,"Loamy,Sandy",Wheat,0.87

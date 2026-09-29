@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { Camera, Upload, Sprout, AlertCircle, CheckCircle, Leaf, Droplets, Sun, Loader2, ArrowLeft, Volume2 } from "lucide-react";
+import { Camera, Upload, Sprout, AlertCircle, CheckCircle, Leaf, Droplets, Sun, Loader2, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -8,8 +8,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { analyzeCropHealth } from "@/api";
 import { useLanguage } from "@/context/LanguageContext";
-import { speakMessage, isSpeechSupported } from "@/utils/voiceAssistant";
-import { getVoiceMessage } from "@/utils/voiceMessages";
+import { VoiceButton } from "@/components/VoiceButton";
 
 interface HealthAnalysisResult {
   healthStatus: string;
@@ -27,7 +26,6 @@ const CropHealthMonitor = () => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<HealthAnalysisResult | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const speechSupported = isSpeechSupported();
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -95,16 +93,6 @@ const CropHealthMonitor = () => {
 
       if (result.success && result.data) {
         setAnalysisResult(result.data);
-        
-        // Speak analysis results
-        if (speechSupported) {
-          const healthMsg = result.data.healthStatus === 'Healthy' 
-            ? getVoiceMessage(language, 'healthyCrop')
-            : getVoiceMessage(language, 'diseaseDetected');
-          
-          const message = `${getVoiceMessage(language, 'analysisComplete')} ${healthMsg} ${result.data.issue || ''}`;
-          speakMessage(message, language);
-        }
         
         toast({
           title: "Analysis Complete",
@@ -260,6 +248,7 @@ const CropHealthMonitor = () => {
                 {getHealthIcon(analysisResult.healthStatus)}
                 Analysis Results
               </CardTitle>
+              <VoiceButton language={language} message={`Analysis Results. Health Status: ${analysisResult.healthStatus}. ${analysisResult.issue ? `Issue: ${analysisResult.issue}.` : ""} ${analysisResult.recommendation ? `Suggested Action: ${analysisResult.recommendation}.` : ""}`} />
             </CardHeader>
             <CardContent className="space-y-4">
               {/* Health Status */}

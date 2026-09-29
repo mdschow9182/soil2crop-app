@@ -1,97 +1,148 @@
-/**
- * Soil Report Model
- * 
- * Research Relevance:
- * - Stores historical soil data for trend analysis
- * - Links soil conditions to crop outcomes
- * - Supports precision agriculture research
- */
-
 const mongoose = require('mongoose');
+const { PARAMETERS } = require('../services/soilParameterConfig');
 
+const parameterSchema = new mongoose.Schema({
+  value: { type: Number, default: null }, unit: { type: String, default: null },
+  source: { type: String, enum: ['pdf_text', 'ocr', 'manual', null], default: null },
+  confidence: { type: Number, min: 0, max: 1, default: 0 },
+  status: { type: String, enum: ['extracted', 'missing', 'needs_review', 'verified', 'manually_entered'], default: 'missing' },
+  originalText: { type: String, default: null }
+}, { _id: false });
+const soilParametersSchema = new mongoose.Schema(Object.fromEntries(Object.keys(PARAMETERS).map((key) => [key, { type: parameterSchema, default: () => ({}) }])), { _id: false });
+
+/**
+ * Soil Report Schema
+ * Stores soil test data with confidence scoring
+ */
 const soilReportSchema = new mongoose.Schema({
-  farmerId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Farmer',
-    required: [true, 'Farmer ID is required'],
+  reportId: {
+    type: String,
+    unique: true,
+    sparse: true  // Allow null initially, will be generated pre-save
+  },
+  userId: {
+    type: String,
+    required: true,
+    ref: 'User',
     index: true
   },
+  // File upload metadata
   filePath: {
     type: String,
     default: null
   },
-  ph: {
-    type: Number,
-    min: [0, 'pH cannot be less than 0'],
-    max: [14, 'pH cannot be more than 14'],
+  fileName: {
+    type: String,
     default: null
   },
+  fileType: {
+    type: String,
+    default: null
+  },
+  fileSize: {
+    type: Number,
+    default: null
+  },
+  soilParameters: { type: soilParametersSchema, default: () => ({}) },
+  extractionStatus: { type: String, enum: ['pending_review', 'extracted', 'needs_review', 'failed', 'verified', 'manually_entered'], default: 'manually_entered' },
+  extractionMethod: { type: String, enum: ['pdf_text', 'ocr', 'manual', null], default: null },
+  extractedText: { type: String, default: null, select: false },
+  parsingNotes: { type: [String], default: [] },
+  // Soil parameters
   nitrogen: {
     type: Number,
+    default: null,
     min: [0, 'Nitrogen cannot be negative'],
-    default: null
+    max: [500, 'Nitrogen value seems unrealistic']
   },
   phosphorus: {
     type: Number,
+    default: null,
     min: [0, 'Phosphorus cannot be negative'],
-    default: null
+    max: [100, 'Phosphorus value seems unrealistic']
   },
   potassium: {
     type: Number,
+    default: null,
     min: [0, 'Potassium cannot be negative'],
-    default: null
+    max: [500, 'Potassium value seems unrealistic']
   },
-  soilType: {
-    type: String,
-    enum: ['Sandy', 'Loamy', 'Clay', 'Silty', 'Unknown'],
-    default: 'Unknown'
+  ph: {
+    type: Number,
+    default: null,
+    min: [0, 'pH cannot be less than 0'],
+    max: [14, 'pH cannot be more than 14']
   },
-  fertilityLevel: {
-    type: String,
-    enum: ['Low', 'Medium', 'High', null],
-    default: null
+  // Metadata
+  reportDate: {
+    type: Date,
+    required: true,
+    default: Date.now
   },
   confidenceScore: {
     type: Number,
     min: 0,
     max: 100,
     default: 100
+  },
+  soilType: {
+    type: String,
+    enum: ['Sandy', 'Loamy', 'Clay', 'Unknown'],
+    default: 'Unknown'
   }
 }, {
-  timestamps: true,
-  toJSON: { virtuals: true },
-  toObject: { virtuals: true }
+  timestamps: true
 });
 
-// Compound index for farmer queries
-soilReportSchema.index({ farmerId: 1, createdAt: -1 });
+// Compound index for user queries
+soilReportSchema.index({ userId: 1, createdAt: -1 });
 
-// Virtual for report id reference
-soilReportSchema.virtual('id').get(function() {
-  return this._id.toString();
+// Calculate confidence score before saving
+soilReportSchema.pre('save', function(next) {
+  this.confidenceScore = this.calculateInstanceConfidenceScore();
+  
+  // Generate reportId if not provided
+  if (!this.reportId) {
+    this.reportId = 'SR' + Date.now().toString(36).toUpperCase();
+  }
+  
+  next();
 });
 
-// Note: confidenceScore is automatically set to 100 by schema default
-
-// Instance method to calculate confidence score
-soilReportSchema.methods.calculateConfidenceScore = function() {
+// Static method to calculate confidence score
+soilReportSchema.statics.calculateConfidenceScore = function({
+  reportDate,
+  nitrogen,
+  phosphorus,
+  potassium,
+  ph
+}) {
   let score = 100;
   
   // Check report age (-30% if older than 2 years)
-  if (this.createdAt) {
-    const ageInDays = Math.floor((Date.now() - this.createdAt.getTime()) / (1000 * 60 * 60 * 24));
-    if (ageInDays > 730) {
-      score -= 30;
-    }
+  const ageInDays = Math.floor((Date.now() - new Date(reportDate).getTime()) / (1000 * 60 * 60 * 24));
+  if (ageInDays > 730) {
+    score -= 30;
   }
   
   // Check for extreme values (-10% each)
-  if (this.nitrogen !== null && (this.nitrogen > 400 || this.nitrogen < 10)) score -= 10;
-  if (this.phosphorus !== null && (this.phosphorus > 80 || this.phosphorus < 5)) score -= 10;
-  if (this.potassium !== null && (this.potassium > 400 || this.potassium < 10)) score -= 10;
-  if (this.ph !== null && (this.ph > 9 || this.ph < 4)) score -= 10;
+  if (nitrogen != null && (nitrogen > 400 || nitrogen < 10)) score -= 10;
+  if (phosphorus != null && (phosphorus > 80 || phosphorus < 5)) score -= 10;
+  if (potassium != null && (potassium > 400 || potassium < 10)) score -= 10;
+  if (ph != null && (ph > 9 || ph < 4)) score -= 10;
   
   return Math.max(0, Math.min(100, score));
+};
+
+// Instance method to calculate confidence score (for pre-save hook)
+soilReportSchema.methods.calculateInstanceConfidenceScore = function() {
+  return this.constructor.calculateConfidenceScore({
+    reportDate: this.reportDate,
+    nitrogen: this.nitrogen,
+    phosphorus: this.phosphorus,
+    potassium: this.potassium,
+    ph: this.ph
+  });
 };
 
 // Static method to get confidence label

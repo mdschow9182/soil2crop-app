@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Send, Bot, User, Loader2, MessageSquare, X, Volume2, VolumeX, Globe } from "lucide-react";
+import { Send, Bot, User, Loader2, MessageSquare, X, Globe } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -8,12 +8,15 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { fetchFarmerAssistant } from "@/api";
 import { useLanguage } from "@/context/LanguageContext";
+import { stopSpeech } from "@/utils/voiceAssistant";
+import { VoiceButton } from "@/components/VoiceButton";
 
 interface Message {
   id: string;
   role: "user" | "assistant";
   content: string;
   timestamp: Date;
+  language: string;
 }
 
 interface SuggestedQuestion {
@@ -26,8 +29,6 @@ const AIFarmerAssistant = () => {
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
-  const [isSpeaking, setIsSpeaking] = useState(false);
-  const [speechSynthesis, setSpeechSynthesis] = useState<SpeechSynthesis | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
   const { language } = useLanguage();
@@ -50,18 +51,21 @@ const AIFarmerAssistant = () => {
   }, [messages]);
 
   useEffect(() => {
-    // Initialize speech synthesis
-    if (typeof window !== 'undefined' && window.speechSynthesis) {
-      setSpeechSynthesis(window.speechSynthesis);
-    }
-  }, []);
-
-  useEffect(() => {
     // Add welcome message when chat opens
     if (isOpen && messages.length === 0) {
       addWelcomeMessage();
     }
   }, [isOpen]);
+
+  useEffect(() => {
+    stopSpeech();
+  }, [language]);
+
+  useEffect(() => {
+    const openAssistant = () => setIsOpen(true);
+    window.addEventListener("soil2crop:open-ai-assistant", openAssistant);
+    return () => window.removeEventListener("soil2crop:open-ai-assistant", openAssistant);
+  }, []);
 
   const addWelcomeMessage = () => {
     const welcomeMessage: Message = {
@@ -69,6 +73,7 @@ const AIFarmerAssistant = () => {
       role: "assistant",
       content: "🙏 Namaste! I'm your AI Farming Assistant.\n\nI can help you with:\n• Crop recommendations\n• Pest and disease management\n• Water and fertilizer guidance\n• Market prices\n• Government schemes\n\nWhat would you like to know?",
       timestamp: new Date(),
+      language,
     };
     setMessages([welcomeMessage]);
   };
@@ -79,10 +84,7 @@ const AIFarmerAssistant = () => {
     if (!messageText.trim()) return;
 
     // Stop any ongoing speech
-    if (speechSynthesis) {
-      speechSynthesis.cancel();
-      setIsSpeaking(false);
-    }
+    stopSpeech();
 
     // Add user message
     const userMessage: Message = {
@@ -90,6 +92,7 @@ const AIFarmerAssistant = () => {
       role: "user",
       content: messageText,
       timestamp: new Date(),
+      language,
     };
 
     setMessages((prev) => [...prev, userMessage]);
@@ -109,6 +112,7 @@ const AIFarmerAssistant = () => {
         role: "assistant",
         content: response.response || "I'm sorry, I couldn't process your request. Please try again.",
         timestamp: new Date(),
+        language,
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
@@ -128,6 +132,7 @@ const AIFarmerAssistant = () => {
         role: "assistant",
         content: "I apologize, but I'm having trouble connecting right now. Please check your internet connection and try again.",
         timestamp: new Date(),
+        language,
       };
 
       setMessages((prev) => [...prev, errorMessage]);
@@ -156,54 +161,6 @@ const AIFarmerAssistant = () => {
     });
   };
 
-  // Text-to-speech function
-  const speakMessage = (content: string) => {
-    if (!speechSynthesis) {
-      toast({
-        title: "Voice Not Available",
-        description: "Text-to-speech is not supported in your browser",
-        variant: "default",
-      });
-      return;
-    }
-
-    // Stop current speech if any
-    if (isSpeaking) {
-      speechSynthesis.cancel();
-      setIsSpeaking(false);
-      return;
-    }
-
-    // Clean content for speech (remove markdown, emojis)
-    const cleanContent = content
-      .replace(/[*#`]/g, '')
-      .replace(/🌱|🌾|💧|💰|🐛|🔄|🌍|🦠|🏛️/g, '')
-      .replace(/\n+/g, ' ')
-      .trim();
-
-    const utterance = new SpeechSynthesisUtterance(cleanContent);
-    
-    // Set language based on app language
-    const langMap: Record<string, string> = {
-      en: 'en-IN',
-      te: 'te-IN',
-      hi: 'hi-IN',
-      ta: 'ta-IN',
-      kn: 'kn-IN',
-      ml: 'ml-IN'
-    };
-    
-    utterance.lang = langMap[language] || 'en-IN';
-    utterance.rate = 0.9; // Slightly slower for clarity
-    utterance.pitch = 1.0;
-
-    utterance.onstart = () => setIsSpeaking(true);
-    utterance.onend = () => setIsSpeaking(false);
-    utterance.onerror = () => setIsSpeaking(false);
-
-    speechSynthesis.speak(utterance);
-  };
-
   const formatContent = (content: string) => {
     // Simple markdown-like formatting
     return content.split("\n").map((line, index) => (
@@ -219,7 +176,7 @@ const AIFarmerAssistant = () => {
     return (
       <Button
         onClick={() => setIsOpen(true)}
-        className="fixed bottom-20 right-4 w-14 h-14 rounded-full shadow-lg z-50 bg-primary hover:bg-primary/90"
+        className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] right-20 z-50 hidden h-14 w-14 rounded-full bg-primary shadow-lg hover:bg-primary/90 sm:inline-flex"
         size="icon"
       >
         <MessageSquare className="w-6 h-6" />
@@ -228,7 +185,7 @@ const AIFarmerAssistant = () => {
   }
 
   return (
-    <Card className="fixed bottom-20 right-4 w-[90vw] sm:w-[380px] h-[550px] shadow-2xl z-50 flex flex-col border-2">
+    <Card className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] right-4 z-50 flex h-[min(550px,calc(100dvh-9rem-env(safe-area-inset-bottom)))] w-[min(380px,calc(100vw-2rem))] flex-col border-2 shadow-2xl">
       {/* Header */}
       <CardHeader className="bg-gradient-to-r from-primary/10 to-purple-500/10 border-b pb-3">
         <div className="flex items-center justify-between">
@@ -258,7 +215,8 @@ const AIFarmerAssistant = () => {
             variant="ghost"
             size="icon"
             onClick={() => setIsOpen(false)}
-            className="h-8 w-8"
+            className="h-11 w-11"
+            aria-label="Close AI Farming Assistant"
           >
             <X className="w-4 h-4" />
           </Button>
@@ -312,19 +270,14 @@ const AIFarmerAssistant = () => {
                     }`}>
                       {formatTime(message.timestamp)}
                     </div>
-                    {message.role === "assistant" && (
-                      <Button
+                    {message.role === "assistant" && message.language === language && (
+                      <VoiceButton
+                        language={language}
+                        message={message.content.replace(/[*#`]/g, "").replace(/\n+/g, " ").trim()}
+                        size="sm"
                         variant="ghost"
-                        size="icon"
-                        className="h-6 w-6 -mr-1 hover:bg-primary/10"
-                        onClick={() => speakMessage(message.content)}
-                      >
-                        {isSpeaking ? (
-                          <VolumeX className="w-3 h-3" />
-                        ) : (
-                          <Volume2 className="w-3 h-3" />
-                        )}
-                      </Button>
+                        className="h-6 px-2"
+                      />
                     )}
                   </div>
                 </div>

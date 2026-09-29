@@ -5,28 +5,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { Globe, User, Bell, Sprout } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-
-const LANGUAGES = [
-  { code: "en", name: "English", native: "English" },
-  { code: "te", name: "Telugu", native: "తెలుగు" },
-  { code: "hi", name: "Hindi", native: "हिंदी" },
-  { code: "ta", name: "Tamil", native: "தமிழ்" },
-  { code: "kn", name: "Kannada", native: "ಕನ್ನಡ" },
-  { code: "ml", name: "Malayalam", native: "മലയാളം" },
-];
+import { supportedLanguages } from "@/i18n/translations";
 
 const Settings = () => {
   const { language, setLanguage, t } = useLanguage();
   const { toast } = useToast();
 
   const handleLanguageChange = (newLanguage: string) => {
-    console.log('[Settings] handleLanguageChange called with:', newLanguage);
-    console.log('[Settings] current language:', language);
-    
-    setLanguage(newLanguage as any);
-    
-    const langName = LANGUAGES.find(l => l.code === newLanguage)?.name || newLanguage;
-    console.log('[Settings] after setLanguage, toast message:', langName);
+    if (!supportedLanguages.some((item) => item.code === newLanguage)) return;
+    const languageCode = newLanguage as typeof supportedLanguages[number]["code"];
+    setLanguage(languageCode);
+    const langName = supportedLanguages.find((item) => item.code === languageCode)?.name || languageCode;
     
     toast({
       title: t.languageUpdated || "Language Updated",
@@ -43,7 +32,7 @@ const Settings = () => {
       <header className="border-b bg-card">
         <div className="container max-w-3xl mx-auto px-4 py-4 flex items-center gap-3">
           <Sprout className="w-7 h-7 text-primary" />
-          <h1 className="text-xl font-heading font-bold text-foreground">Settings</h1>
+          <h1 className="text-xl font-heading font-bold text-foreground">{t.settingsTitle}</h1>
         </div>
       </header>
 
@@ -53,17 +42,17 @@ const Settings = () => {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <User className="w-5 h-5" />
-              Profile
+              {t.profile}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
-              <Label className="text-muted-foreground">Farmer Name</Label>
+              <Label className="text-muted-foreground">{t.farmerNameLabel}</Label>
               <p className="text-lg font-medium">{farmerName}</p>
             </div>
             {farmerId && (
               <div>
-                <Label className="text-muted-foreground">Farmer ID</Label>
+                <Label className="text-muted-foreground">{t.farmerIdLabel}</Label>
                 <p className="text-sm text-muted-foreground">#{farmerId}</p>
               </div>
             )}
@@ -75,18 +64,18 @@ const Settings = () => {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Globe className="w-5 h-5" />
-              Language
+              {t.language}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="language">Select App Language</Label>
+              <Label htmlFor="language">{t.selectAppLanguage}</Label>
               <Select value={language} onValueChange={handleLanguageChange}>
                 <SelectTrigger id="language" className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {LANGUAGES.map((lang) => (
+                  {supportedLanguages.map((lang) => (
                     <SelectItem key={lang.code} value={lang.code}>
                       <span className="flex items-center gap-2">
                         <span>{lang.native}</span>
@@ -101,13 +90,13 @@ const Settings = () => {
             {/* Current Language Display */}
             <div className="rounded-lg bg-blue-50/50 dark:bg-blue-900/20 p-3 border border-blue-200 dark:border-blue-800">
               <p className="text-xs text-blue-600 dark:text-blue-400">
-                Current Language Code: <span className="font-bold">{language}</span>
+                {t.currentLanguageCode}: <span className="font-bold">{language}</span>
               </p>
             </div>
 
             {/* Preview */}
             <div className="rounded-lg bg-secondary p-4 space-y-2">
-              <p className="text-sm font-medium text-secondary-foreground">Preview (Auto-updates):</p>
+              <p className="text-sm font-medium text-secondary-foreground">{t.previewAutoUpdates}</p>
               <div className="space-y-1 text-sm">
                 <p>• {t.login}</p>
                 <p>• {t.uploadSoil}</p>
@@ -121,14 +110,14 @@ const Settings = () => {
         {/* Notifications Card */}
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+          <CardTitle className="flex items-center gap-2">
               <Bell className="w-5 h-5" />
-              Notifications
+              {t.notificationsTitle}
             </CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground">
-              Crop calendar alerts and reminders will appear here.
+              {t.calendarAlertsReminder}
             </p>
           </CardContent>
         </Card>
@@ -139,11 +128,13 @@ const Settings = () => {
           className="w-full"
           onClick={() => {
             localStorage.removeItem("farmer_id");
+            localStorage.removeItem("farmerId");
+            localStorage.removeItem("soil2crop_token");
             localStorage.removeItem("farmer_name");
             window.location.href = "/";
           }}
         >
-          Logout
+          {t.logout}
         </Button>
       </main>
     </div>

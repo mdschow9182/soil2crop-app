@@ -1,33 +1,46 @@
 /**
- * Basic Authentication Middleware
- * - Prevents data leakage between farmers
- * - Ensures logged-in farmer can only access their own data
- * - Future: Can be extended to JWT-based auth
+ * Authentication Middleware
+ * Verify JWT tokens for protected routes
  */
 
-/**
- * Middleware to verify farmer owns the requested data
- * Prevents accessing other farmers' data by ID
- * Usage: app.get('/alerts/:farmer_id', ensureOwnFarmer('farmer_id'), handler)
- */
-function ensureOwnFarmer(paramName = 'farmer_id') {
-  return (req, res, next) => {
-    const requestedFarmerId = req.params[paramName] || req.body.farmer_id;
-    const loggedInFarmerId = req.headers['x-farmer-id'];
+const jwt = require('jsonwebtoken');
 
-    // For demo: Check if logged-in farmer matches requested farmer
-    // In production: Would use JWT token instead of header
-    if (loggedInFarmerId && String(requestedFarmerId) !== String(loggedInFarmerId)) {
-      return res.status(403).json({
+const auth = async (req, res, next) => {
+  try {
+    // Get token from header
+    const token = req.header('Authorization')?.replace('Bearer ', '');
+
+    if (!token) {
+      return res.status(401).json({
         success: false,
-        message: 'Unauthorized: Cannot access other farmers\' data'
+        message: 'No authentication token, access denied'
       });
     }
 
-    next();
-  };
-}
+    // Verify token
+    if (!process.env.JWT_SECRET || (process.env.NODE_ENV === 'production' && process.env.JWT_SECRET.length < 32)) {
+      throw new Error('JWT_SECRET must be configured; production values must contain at least 32 characters');
+    }
+    const decoded = jwt.verify(token, process.env.JWT_SECRET, { algorithms: ['HS256'] });
+    req.userId = decoded.userId;
+    req.farmerId = decoded.farmerId;
+    req.userMobile = decoded.mobile;
 
-module.exports = {
-  ensureOwnFarmer
+    next();
+  } catch (error) {
+    res.status(401).json({
+      success: false,
+      message: 'Token is not valid'
+    });
+  }
 };
+
+auth.requireOwner = (paramName) => (req, res, next) => {
+  const requestedId = req.params[paramName];
+  if (requestedId !== req.userId && requestedId !== req.farmerId) {
+    return res.status(403).json({ success: false, message: 'You cannot access another farmer’s data' });
+  }
+  next();
+};
+
+module.exports = auth;

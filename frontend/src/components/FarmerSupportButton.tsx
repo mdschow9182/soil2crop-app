@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { HeartHandshake, X, MessageCircle, AlertTriangle, Lightbulb, Phone } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useLanguage } from '@/context/LanguageContext';
@@ -18,6 +18,15 @@ export const FarmerSupportButton = ({ farmerId }: FarmerSupportButtonProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const [selectedOption, setSelectedOption] = useState<SupportOption>(null);
   const { language } = useLanguage();
+
+  useEffect(() => {
+    const openSupport = () => {
+      setSelectedOption(null);
+      setIsOpen(true);
+    };
+    window.addEventListener("soil2crop:open-farmer-support", openSupport);
+    return () => window.removeEventListener("soil2crop:open-farmer-support", openSupport);
+  }, []);
 
   const toggleSupport = () => {
     setIsOpen(!isOpen);
@@ -123,7 +132,7 @@ export const FarmerSupportButton = ({ farmerId }: FarmerSupportButtonProps) => {
   return (
     <>
       {/* Floating Farmer Support Button */}
-      <div className="fixed bottom-6 right-6 z-50">
+      <div className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] right-4 z-50 hidden sm:block">
         {!isOpen ? (
           <Button
             onClick={toggleSupport}
@@ -146,10 +155,10 @@ export const FarmerSupportButton = ({ farmerId }: FarmerSupportButtonProps) => {
 
       {/* Support Panel */}
       {isOpen && (
-        <div className="fixed inset-0 z-40 flex items-end justify-end sm:items-center pointer-events-none">
+        <div className="fixed inset-0 z-40 flex items-end justify-end pb-[calc(5rem+env(safe-area-inset-bottom))] pointer-events-none sm:items-center sm:pb-0">
           <div 
             className="pointer-events-auto bg-white dark:bg-gray-800 rounded-t-2xl sm:rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-hidden flex flex-col"
-            style={{ maxHeight: 'calc(100vh - 100px)' }}
+            style={{ maxHeight: 'calc(100dvh - 10rem - env(safe-area-inset-bottom))' }}
           >
             {/* Header */}
             <div className="bg-gradient-to-r from-green-600 to-emerald-600 p-4 text-white">
@@ -166,6 +175,9 @@ export const FarmerSupportButton = ({ farmerId }: FarmerSupportButtonProps) => {
                      'Solutions for your questions & problems'}
                   </p>
                 </div>
+                <Button variant="ghost" size="icon" onClick={() => setIsOpen(false)} className="h-11 w-11 text-white hover:bg-white/20" aria-label="Close Farmer Support">
+                  <X className="h-5 w-5" />
+                </Button>
                 {selectedOption && (
                   <Button
                     variant="ghost"

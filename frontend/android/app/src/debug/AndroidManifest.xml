@@ -1,0 +1,4 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Cleartext HTTP is enabled only in debug builds for private LAN API testing. -->
+    <application android:usesCleartextTraffic="true" />
+</manifest>

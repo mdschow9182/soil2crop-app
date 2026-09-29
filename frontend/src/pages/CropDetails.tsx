@@ -1,6 +1,8 @@
 import { useNavigate, useLocation } from "react-router-dom";
 import { Sprout, Leaf, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { VoiceButton } from "@/components/VoiceButton";
+import { useLanguage } from "@/context/LanguageContext";
 
 const CROP_NAMES: Record<string, string> = {
   paddy: "🌾 Paddy",
@@ -39,6 +41,7 @@ const STAGES = [
 const CropDetails = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { language } = useLanguage();
   const { cropId = "paddy" } = (location.state as any) || {};
   const cropName = CROP_NAMES[cropId] || "🌾 Paddy";
 
@@ -55,6 +58,11 @@ const CropDetails = () => {
         <div className="rounded-xl border bg-card p-5 shadow-sm text-center">
           <p className="text-sm text-muted-foreground">Selected Crop</p>
           <h2 className="text-2xl font-heading font-bold text-foreground mt-1">{cropName}</h2>
+          <VoiceButton
+            language={language}
+            className="mt-3"
+            message={`${cropName}. ${STAGES.map((stage) => `${stage.name}, ${stage.weeks}. Organic: ${stage.organic}. Chemical: ${stage.chemical}`).join(" ")}`}
+          />
         </div>
 
         {/* Crop Calendar */}

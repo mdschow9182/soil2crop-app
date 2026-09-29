@@ -16,14 +16,15 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { fetchFarmerAssistant, getSuggestedQuestions } from "@/api";
 import { useLanguage } from "@/context/LanguageContext";
-import { speakMessage } from "@/utils/voiceAssistant";
+import { VoiceButton } from "@/components/VoiceButton";
+import { stopSpeech } from "@/utils/voiceAssistant";
 
 interface Message {
   id: string;
   text: string;
   sender: 'user' | 'bot';
   timestamp: Date;
-  voicePlayed?: boolean;
+  language: string;
 }
 
 const AIChatbot = () => {
@@ -68,7 +69,8 @@ const AIChatbot = () => {
       id: Date.now().toString(),
       text: queryToSend,
       sender: 'user',
-      timestamp: new Date()
+      timestamp: new Date(),
+      language,
     };
 
     setMessages(prev => [...prev, userMessage]);
@@ -82,17 +84,12 @@ const AIChatbot = () => {
         id: (Date.now() + 1).toString(),
         text: response.response,
         sender: 'bot',
-        timestamp: new Date()
+        timestamp: new Date(),
+        language,
       };
 
       setMessages(prev => [...prev, botMessage]);
 
-      // Voice output if enabled
-      if (voiceEnabled) {
-        speakMessage(response.response, language, undefined, (err) => {
-          console.error('Voice error:', err);
-        });
-      }
     } catch (error: any) {
       console.error('AI Assistant error:', error);
       
@@ -104,7 +101,8 @@ const AIChatbot = () => {
           ? 'क्षमा करें, प्रश्न को संसाधित नहीं कर सका। कृपया पुनः प्रयास करें।'
           : 'Sorry, I could not process your question. Please try again.',
         sender: 'bot',
-        timestamp: new Date()
+        timestamp: new Date(),
+        language,
       };
       
       setMessages(prev => [...prev, errorMessage]);
@@ -114,6 +112,7 @@ const AIChatbot = () => {
   };
 
   const toggleVoice = () => {
+    if (voiceEnabled) stopSpeech();
     setVoiceEnabled(!voiceEnabled);
   };
 
@@ -239,6 +238,11 @@ const AIChatbot = () => {
                     }`}
                   >
                     <p className="text-sm whitespace-pre-wrap">{message.text}</p>
+                    {message.sender === "bot" && voiceEnabled && message.language === language && (
+                      <div className="mt-2">
+                        <VoiceButton language={language} message={message.text} size="sm" variant="ghost" />
+                      </div>
+                    )}
                     <p className={`text-xs mt-1 ${
                       message.sender === 'user' ? 'text-blue-100' : 'text-gray-500'
                     }`}>

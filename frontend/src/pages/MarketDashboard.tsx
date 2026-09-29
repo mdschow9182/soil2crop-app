@@ -26,7 +26,7 @@ import { getMarketPrice, getAllMarketPrices, getSchemeRecommendations } from "@/
 import { useLanguage } from "@/context/LanguageContext";
 import { useToast } from "@/hooks/use-toast";
 import MarketTrends from "./MarketTrends";
-import { speakMessage, isSpeechSupported, initializeVoices } from "@/utils/voiceAssistant";
+import { VoiceButton } from "@/components/VoiceButton";
 
 interface MarketPrice {
   crop: string;
@@ -59,15 +59,6 @@ const MarketDashboard = () => {
   const [schemes, setSchemes] = useState<Scheme[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [hasSpokenPrices, setHasSpokenPrices] = useState(false);
-  const speechSupported = isSpeechSupported();
-
-  // Initialize voices on mount
-  useEffect(() => {
-    if (speechSupported) {
-      initializeVoices();
-    }
-  }, [speechSupported]);
 
   // Default government schemes as fallback
   const defaultSchemes: Scheme[] = [
@@ -96,14 +87,14 @@ const MarketDashboard = () => {
       name: "Paramparagat Krishi Vikas Yojana",
       benefit: "Support for organic farming practices",
       eligibility: "Groups of farmers forming clusters",
-      link: "#",
+      link: "https://pgsindia-ncof.gov.in",
       category: "Organic Farming"
     },
     {
       name: "Pradhan Mantri Krishi Sinchai Yojana",
       benefit: "Irrigation facilities and water conservation",
       eligibility: "All farmers",
-      link: "#",
+      link: "https://pmksy.gov.in",
       category: "Irrigation"
     }
   ];
@@ -136,19 +127,6 @@ const MarketDashboard = () => {
         const prices = response.data.prices || [];
         setAllPrices(prices.length > 0 ? prices : getDefaultPrices());
         
-        // Speak when prices are loaded
-        if (speechSupported && !hasSpokenPrices && prices.length > 0) {
-          const priceMsg = language === 'te'
-            ? `ప్రస్తుత మార్కెట్ ధరలు ${prices.length} పంటలకు అందుబాటులో ఉన్నాయి.`
-            : language === 'hi'
-            ? `${prices.length} फसलों के लिए वर्तमान बाजार मूल्य उपलब्ध हैं।`
-            : `Current market prices for ${prices.length} crops are now displayed.`;
-          
-          speakMessage(priceMsg, language, undefined, (err) => {
-            console.error('Voice error:', err);
-            setHasSpokenPrices(true);
-          });
-        }
       } else {
         throw new Error("Failed to fetch market prices");
       }
@@ -421,6 +399,7 @@ const MarketDashboard = () => {
                 {priceData.crop} Price in {priceData.location}
               </CardTitle>
               <CardDescription>Last updated: {new Date(priceData.last_updated).toLocaleString()}</CardDescription>
+              <VoiceButton language={language} size="sm" variant="outline" message={`${priceData.crop} Price in ${priceData.location}. ${t.minPrice || "Min Price"}: ${priceData.min_price} rupees per quintal. ${t.avgPrice || "Avg Price"}: ${priceData.avg_price} rupees per quintal. ${t.maxPrice || "Max Price"}: ${priceData.max_price} rupees per quintal. ${t.marketTrend || "Market Trend"}: ${priceData.market_trend}.`} />
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-3 gap-4">
