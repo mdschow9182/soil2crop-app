@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Volume2, VolumeX } from 'lucide-react';
 import { Button } from './ui/button';
 import { speakMessage, stopSpeech, isSpeechSupported } from '@/utils/voiceAssistant';
+import { speakWithGnani } from '@/api';
 import { useLanguage } from '@/context/LanguageContext';
 
 interface VoiceButtonProps {
@@ -12,6 +13,7 @@ interface VoiceButtonProps {
   className?: string;
   onSpeakStart?: () => void;
   onSpeakEnd?: () => void;
+  useGnani?: boolean;
 }
 
 export const VoiceButton = ({
@@ -22,10 +24,13 @@ export const VoiceButton = ({
   className = '',
   onSpeakStart,
   onSpeakEnd,
+  useGnani = false,
 }: VoiceButtonProps) => {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [voiceStatus, setVoiceStatus] = useState('');
   const mounted = useRef(true);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioUrlRef = useRef<string | null>(null);
   const { t } = useLanguage();
   const supported = isSpeechSupported();
 
@@ -34,18 +39,23 @@ export const VoiceButton = ({
     return () => {
       mounted.current = false;
       stopSpeech();
+      audioRef.current?.pause();
+      if (audioUrlRef.current) URL.revokeObjectURL(audioUrlRef.current);
     };
   }, []);
 
   // A language or displayed sentence change invalidates any speech from the old render.
   useEffect(() => {
     stopSpeech();
+    audioRef.current?.pause();
+    if (audioUrlRef.current) URL.revokeObjectURL(audioUrlRef.current);
+    audioUrlRef.current = null;
     setIsSpeaking(false);
     setVoiceStatus('');
   }, [language, message]);
 
   const handleSpeak = () => {
-    if (!supported) {
+    if (!useGnani && !supported) {
       setVoiceStatus(t.voiceUnsupported);
       return;
     }
@@ -56,6 +66,7 @@ export const VoiceButton = ({
 
     if (isSpeaking) {
       stopSpeech();
+      audioRef.current?.pause();
       setIsSpeaking(false);
       if (onSpeakEnd) onSpeakEnd();
       return;
@@ -63,6 +74,29 @@ export const VoiceButton = ({
 
     setIsSpeaking(true);
     setVoiceStatus('');
+    if (useGnani) {
+      void speakWithGnani(message, language).then((audio) => {
+        if (!mounted.current) return;
+        const url = URL.createObjectURL(audio);
+        audioUrlRef.current = url;
+        const player = new Audio(url);
+        audioRef.current = player;
+        player.onended = () => { if (mounted.current) setIsSpeaking(false); onSpeakEnd?.(); };
+        player.onerror = () => {
+          console.error('[VoiceButton] Gnani audio playback failed', { mediaErrorCode: player.error?.code ?? null });
+          if (mounted.current) { setIsSpeaking(false); setVoiceStatus(t.voiceUnavailable); }
+        };
+        onSpeakStart?.();
+        return player.play();
+      }).catch((error: unknown) => {
+        console.error('[VoiceButton] Gnani speech request or playback failed', {
+          name: error instanceof Error ? error.name : 'UnknownError',
+          message: error instanceof Error ? error.message : 'Unknown playback error',
+        });
+        if (mounted.current) { setIsSpeaking(false); setVoiceStatus(t.voiceUnavailable); }
+      });
+      return;
+    }
     void speakMessage(
       message,
       language,
@@ -96,7 +130,7 @@ export const VoiceButton = ({
     });
   };
 
-  if (!supported) {
+  if (!supported && !useGnani) {
     return <span role="status" className="text-xs text-muted-foreground">{t.voiceUnsupported}</span>;
   }
 

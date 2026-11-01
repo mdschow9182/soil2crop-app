@@ -29,7 +29,7 @@ describe('verified crop advice route contract', () => {
     });
     expect(response.status).toBe(200);
     expect(SoilReport.findOne).toHaveBeenCalledWith({ reportId: 'SR-1', userId: 'FARMER-1' });
-    expect(recommendationService.generateRecommendations).toHaveBeenCalledWith('FARMER-1', 'SR-1', null);
+    expect(recommendationService.generateRecommendations).toHaveBeenCalledWith('FARMER-1', 'SR-1', null, { season: null, waterAvailability: null });
   });
 
   test('rejects raw soil values without a saved report ID', async () => {

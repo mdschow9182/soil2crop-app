@@ -154,7 +154,7 @@ const ruleStatus = (crop, key, hasValue) => {
   return { status: 'project_configured', sourceReference: null, provenanceNote: 'Legacy project configuration; source not recorded' };
 };
 
-const evaluateCrop = (crop, report, soilSummary) => {
+const evaluateCrop = (crop, report, soilSummary, context = {}) => {
   const matchedFactors = [];
   const limitingFactors = [];
   const missingInputs = [];
@@ -243,6 +243,34 @@ const evaluateCrop = (crop, report, soilSummary) => {
   ruleProvenance.cropStages = ruleStatus(crop, 'cropStages', Boolean(crop.cropStages?.length));
   ruleProvenance.waterRequirement = ruleStatus(crop, 'waterRequirement', Boolean(crop.waterRequirement));
 
+  const requestedSeason = String(context.season || '').trim().toLowerCase();
+  const configuredSeasons = Array.isArray(crop.season) ? crop.season.map((season) => String(season).trim()) : [];
+  const seasonMatch = requestedSeason && configuredSeasons.length
+    ? configuredSeasons.some((season) => season.toLowerCase() === requestedSeason)
+    : null;
+  const requestedWater = String(context.waterAvailability || '').trim().toLowerCase();
+  const waterMatch = requestedWater && crop.waterRequirement
+    ? String(crop.waterRequirement).toLowerCase() === requestedWater
+    : null;
+  const contextFit = {
+    season: {
+      value: context.season || null,
+      status: !requestedSeason ? 'not_provided' : !configuredSeasons.length ? 'unavailable' : seasonMatch ? 'matched' : 'not_matched',
+      configuredValues: configuredSeasons,
+    },
+    waterAvailability: {
+      value: context.waterAvailability || null,
+      cropWaterRequirement: crop.waterRequirement || null,
+      status: !requestedWater ? 'not_provided' : !crop.waterRequirement ? 'unavailable' : waterMatch ? 'matched' : 'not_matched',
+      comparison: 'qualitative_category_exact_match_only',
+    },
+    location: {
+      value: context.location || null,
+      status: context.location ? 'unavailable' : 'not_provided',
+      reason: 'No crop-specific geographic suitability rules are configured.',
+    },
+  };
+
   const availableWeight = evaluations.reduce((sum, item) => sum + item.weight, 0);
   const score = availableWeight > 0
     ? Math.round(evaluations.reduce((sum, item) => sum + (item.matched ? item.weight : 0), 0) / availableWeight * 100)
@@ -271,6 +299,7 @@ const evaluateCrop = (crop, report, soilSummary) => {
       ? `${matchedFactorDescriptions.join(' ')}${limitingFactorDescriptions.length ? ` ${limitingFactorDescriptions[0]}` : ''}`
       : describeFactor('no_configured_match'),
     waterRequirement: crop.waterRequirement || null,
+    contextFit,
     growingPeriodDays: Number.isFinite(crop.growingPeriod) ? crop.growingPeriod : null,
     ruleProvenance,
     fertilizerAdvisory: createFertilizerAdvisory(crop, soilSummary),
@@ -280,11 +309,19 @@ const evaluateCrop = (crop, report, soilSummary) => {
   };
 };
 
-const generateCropAdvice = ({ report, crops }) => {
+const generateCropAdvice = ({ report, crops, context = {} }) => {
   const soilSummary = getSoilSummary(report);
   const hasConfirmedInput = Object.values(soilSummary).some((parameter) => parameter.status === 'available') || (report?.soilType && report.soilType !== 'Unknown');
-  const evaluatedCropRows = crops.map((crop) => evaluateCrop(crop, report, soilSummary));
-  const candidates = evaluatedCropRows.filter((crop) => crop._hasMatch).sort((a, b) => (b.score ?? -1) - (a.score ?? -1));
+  const evaluatedCropRows = crops.map((crop) => evaluateCrop(crop, report, soilSummary, context));
+  const contextPriority = (crop) => [
+    crop.contextFit.season.status === 'matched' ? 1 : 0,
+    crop.contextFit.waterAvailability.status === 'matched' ? 1 : 0,
+  ];
+  const candidates = evaluatedCropRows.filter((crop) => crop._hasMatch).sort((a, b) => {
+    const aContext = contextPriority(a);
+    const bContext = contextPriority(b);
+    return (bContext[0] - aContext[0]) || (bContext[1] - aContext[1]) || ((b.score ?? -1) - (a.score ?? -1));
+  });
   const recommendations = candidates.slice(0, config.limit).map(({ _hasMatch, _evaluatedCount, ...crop }) => crop);
   const missingInputs = [...new Set(Object.entries(soilSummary).filter(([, item]) => item.status !== 'available').map(([key]) => key))];
   return {
@@ -293,6 +330,12 @@ const generateCropAdvice = ({ report, crops }) => {
     recommendations,
     catalogAvailability: crops.length ? 'available' : 'empty',
     missingInputs,
+    context: {
+      season: context.season || null,
+      waterAvailability: context.waterAvailability || null,
+      location: context.location || null,
+      locationRuleAvailability: context.location ? 'unavailable' : 'not_provided',
+    },
     sufficientData: hasConfirmedInput && recommendations.length > 0,
     fertilizerAdvisory: ['nitrogen', 'phosphorus', 'potassium'].map((key) => ({
       nutrient: key,

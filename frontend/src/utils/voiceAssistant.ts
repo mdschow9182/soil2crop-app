@@ -99,8 +99,11 @@ const waitForVoices = (timeoutMs = 2500): Promise<SpeechSynthesisVoice[]> => new
   const initial = initializeVoices();
   if (initial.length || typeof window === "undefined") return resolve(initial);
   let settled = false;
-  let poll: number | undefined;
-  let timeout: number | undefined;
+  const poll = window.setInterval(() => {
+    const voices = refreshVoiceList();
+    if (voices.length) finish(voices);
+  }, 100);
+  const timeout = window.setTimeout(() => finish(refreshVoiceList()), timeoutMs);
   const unsubscribe = subscribeToVoiceChanges((voices) => {
     if (voices.length) finish(voices);
   });
@@ -113,11 +116,6 @@ const waitForVoices = (timeoutMs = 2500): Promise<SpeechSynthesisVoice[]> => new
     resolve(voices);
   };
   // Some engines populate voices but never dispatch voiceschanged. Poll only during this bounded wait.
-  poll = window.setInterval(() => {
-    const voices = refreshVoiceList();
-    if (voices.length) finish(voices);
-  }, 100);
-  timeout = window.setTimeout(() => finish(refreshVoiceList()), timeoutMs);
 });
 
 export const filterIndianVoices = (voices: SpeechSynthesisVoice[]) => voices.filter((voice) =>

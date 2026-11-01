@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const mongoose = require('mongoose');
+const crypto = require('node:crypto');
 const { body, validationResult } = require('express-validator');
 const { extractDocument } = require('../services/documentExtractor');
 const { PARAMETERS } = require('../services/soilParameterConfig');
@@ -52,12 +53,28 @@ const validate = (req, res, next) => {
   next();
 };
 
+const uploadReportPayload = (soilReport) => ({
+  reportId: soilReport.reportId,
+  userId: soilReport.userId,
+  createdAt: soilReport.createdAt,
+  fileName: soilReport.fileName,
+  extractionStatus: soilReport.extractionStatus,
+  extractionMethod: soilReport.extractionMethod,
+  parameters: soilReport.soilParameters,
+  parsingNotes: soilReport.parsingNotes,
+  extracted_values: Object.fromEntries(Object.entries(soilReport.soilParameters || {}).map(([key, item]) => [key, item?.value ?? null])),
+  parsing_notes: soilReport.parsingNotes,
+  file: { name: soilReport.fileName, size: soilReport.fileSize, type: soilReport.fileType }
+});
+
 // ============================================
 // POST /api/soilreport/upload
 // File upload endpoint
 // ============================================
 
 const processUpload = async (req, res) => {
+    let ownerId;
+    let fileHash;
     try {
       console.log('📥 Soil Report Upload Request');
       console.log('Request Body:', req.body);
@@ -110,6 +127,8 @@ const processUpload = async (req, res) => {
         });
       }
 
+      ownerId = farmer.userId || farmer_id;
+
       console.log('✅ Farmer verified:', farmer.userId);
 
       const signatures = {
@@ -123,6 +142,16 @@ const processUpload = async (req, res) => {
         return res.status(400).json({ success: false, message: 'File content does not match its declared format.' });
       }
 
+      fileHash = crypto.createHash('sha256').update(req.file.buffer).digest('hex');
+      const existingReport = await SoilReport.findOne({ userId: ownerId, fileHash });
+      if (existingReport) {
+        return res.status(200).json({
+          success: true,
+          message: 'This file has already been uploaded for this farmer.',
+          report: uploadReportPayload(existingReport)
+        });
+      }
+
       let extraction;
       try {
         extraction = await extractDocument({ buffer: req.file.buffer, mimeType: req.file.mimetype });
@@ -133,8 +162,9 @@ const processUpload = async (req, res) => {
 
       const storedParameters = Object.fromEntries(Object.entries(extraction.parameters).map(([key, value]) => [key, { ...value, source: extraction.extractionMethod }]));
       const soilReport = await SoilReport.create({
-        userId: farmer.userId || farmer_id,
+        userId: ownerId,
         filePath: null, fileName: req.file.originalname, fileType: req.file.mimetype, fileSize: req.file.size,
+        fileHash,
         soilParameters: storedParameters, extractionStatus: extraction.status === 'failed' ? 'failed' : 'pending_review',
         extractionMethod: extraction.extractionMethod, extractedText: extraction.extractedText,
         parsingNotes: extraction.notes, soilType: 'Unknown'
@@ -146,26 +176,20 @@ const processUpload = async (req, res) => {
       res.status(201).json({
         success: true,
         message: 'Soil report uploaded successfully',
-        report: {
-          reportId: soilReport.reportId,
-          userId: soilReport.userId,
-          createdAt: soilReport.createdAt,
-          fileName: soilReport.fileName,
-          extractionStatus: soilReport.extractionStatus,
-          extractionMethod: soilReport.extractionMethod,
-          parameters: soilReport.soilParameters,
-          parsingNotes: soilReport.parsingNotes,
-          extracted_values: Object.fromEntries(Object.entries(storedParameters).map(([key, item]) => [key, item.value])),
-          parsing_notes: soilReport.parsingNotes,
-          file: {
-            name: req.file.originalname,
-            size: req.file.size,
-            type: req.file.mimetype
-          }
-        }
+        report: uploadReportPayload(soilReport)
       });
 
     } catch (error) {
+      if (error.code === 11000 && fileHash && ownerId) {
+        const duplicate = await SoilReport.findOne({ userId: ownerId, fileHash });
+        if (duplicate) {
+          return res.status(200).json({
+            success: true,
+            message: 'This file has already been uploaded for this farmer.',
+            report: uploadReportPayload(duplicate)
+          });
+        }
+      }
       console.error('❌ Upload error:', error);
       
       // Handle multer errors

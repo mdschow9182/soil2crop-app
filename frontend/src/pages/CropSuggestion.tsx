@@ -17,6 +17,11 @@ type CropRecommendation = {
   limitingFactors: string[]; matchedFactorKeys?: string[]; limitingFactorKeys?: string[]; missingInputs: string[]; explanation: string;
   waterRequirement: string | null; growingPeriodDays: number | null;
   ruleProvenance: Record<string, { status: string; sourceReference?: string | null; provenanceNote?: string }>;
+  contextFit?: {
+    season: { value: string | null; status: string; configuredValues: string[] };
+    waterAvailability: { value: string | null; cropWaterRequirement: string | null; status: string };
+    location: { value: string | null; status: string; reason: string };
+  };
   fertilizerAdvisory: {
     status: "unavailable"; reason: string; reasonCodes: string[]; availableNutrients: string[];
     missingNutrients: string[]; needsReviewNutrients: string[]; calculationPerformed: false;
@@ -44,6 +49,7 @@ type AdviceData = {
   fertilizerAdvisory: Array<{ nutrient: string; status: string; reason: string }>;
   irrigationAdvisory: Array<{ cropId: string; status: string; waterRequirement: string | null; reason: string }>;
   weatherAvailability: string; disclaimer: string;
+  context?: { season: string | null; waterAvailability: string | null; location: string | null; locationRuleAvailability: string };
 };
 
 const PARAMETER_LABELS: Record<string, string> = {
@@ -91,7 +97,13 @@ export default function CropSuggestion() {
       setLoading(false);
       return () => { active = false; };
     }
-    getVerifiedCropAdvice({ farmerId, reportId, district: localStorage.getItem("farmer_location") || undefined })
+    getVerifiedCropAdvice({
+      farmerId,
+      reportId,
+      district: location.state?.district || localStorage.getItem("farmer_location") || undefined,
+      season: location.state?.season || localStorage.getItem("farming_season") || undefined,
+      waterAvailability: location.state?.waterAvailability || localStorage.getItem("water_availability") || undefined,
+    })
       .then((result) => {
         if (active && result.success) setAdvice(result.data);
         else if (active) setError(text("cropAdviceFailed"));
@@ -117,6 +129,10 @@ export default function CropSuggestion() {
   };
 
   const statusText = (status: string) => text(statusKeys[status] || status);
+  const contextStatusText = (status: string) => {
+    if (language === "te") return ({ matched: "సరిపోలింది", not_matched: "సరిపోలలేదు", unavailable: "నియమం అందుబాటులో లేదు", not_provided: "ఇవ్వలేదు" }[status] || status);
+    return ({ matched: "matched", not_matched: "not matched", unavailable: "rule unavailable", not_provided: "not provided" }[status] || status);
+  };
 
   if (loading) return <main className="min-h-screen flex items-center justify-center"><Loader2 className="w-7 h-7 animate-spin text-primary" /></main>;
   if (error || !advice) return <main className="min-h-screen p-4"><div className="max-w-3xl mx-auto space-y-4">
@@ -155,6 +171,12 @@ export default function CropSuggestion() {
       </div></CardHeader>
       <CardContent className="space-y-4">
         <p className="text-sm text-muted-foreground">{text("relativeScoreOnly")}</p>
+        {advice.context && (advice.context.season || advice.context.waterAvailability || advice.context.location) && <div className="rounded-md bg-muted/50 p-3 text-sm">
+          <p className="font-medium">{language === "te" ? "ఇచ్చిన వివరాల పోలిక" : "Provided context checks"}</p>
+          {advice.context.season && <p>{language === "te" ? "సీజన్" : "Season"} ({advice.context.season}): {contextStatusText(crop.contextFit?.season.status || "unavailable")}</p>}
+          {advice.context.waterAvailability && <p>{language === "te" ? "నీటి లభ్యత" : "Water availability"} ({advice.context.waterAvailability}): {contextStatusText(crop.contextFit?.waterAvailability.status || "unavailable")}</p>}
+          {advice.context.location && <p>{language === "te" ? "ప్రాంతం" : "Location"} ({advice.context.location}): {contextStatusText(crop.contextFit?.location.status || advice.context.locationRuleAvailability)}</p>}
+        </div>}
         <p className="text-sm"><strong>{text("confidence")}:</strong> {crop.confidence || text("notAvailable")}</p>
         {crop.explanation && <div><h3 className="text-sm font-semibold">{text("explanation")}</h3><p className="mt-1 text-sm leading-relaxed">{crop.explanation}</p></div>}
         <div><h3 className="font-semibold text-sm">{text("matchedFactors")}</h3>

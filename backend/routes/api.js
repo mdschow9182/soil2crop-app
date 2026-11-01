@@ -10,6 +10,7 @@ const Feedback = require('../models/Feedback');
 
 // Services
 const recommendationService = require('../services/recommendationService');
+const farmerAssistantService = require('../services/farmerAssistantService');
 const auth = require('../middleware/auth');
 
 // Auth Routes
@@ -423,13 +424,20 @@ router.post('/crop-recommendation', async (req, res) => {
 // AI FARMER ASSISTANT (Placeholder endpoint)
 // ============================================
 
-router.post('/farmer-assistant', async (req, res) => {
-  res.json({
-    success: true,
-    data: {
-      response: 'Assistant feature coming soon'
-    }
-  });
+router.post('/farmer-assistant', auth, [
+  body('query').isString().trim().isLength({ min: 1, max: 1000 }).withMessage('Question must contain 1 to 1000 characters'),
+  body('language').optional().isIn(['en', 'te', 'hi', 'ta', 'kn', 'ml']).withMessage('Unsupported language'),
+  validate
+], async (req, res) => {
+  try {
+    const language = req.body.language || 'en';
+    const report = await SoilReport.findOne({ userId: req.farmerId }).sort({ reportDate: -1, createdAt: -1 }).lean();
+    const answer = await farmerAssistantService.answerQuestion({ query: req.body.query.trim(), language, report });
+    return res.json({ success: true, data: answer });
+  } catch (error) {
+    console.error('Farmer assistant request failed:', error.message);
+    return res.status(500).json({ success: false, message: 'Could not prepare an answer. Please try again.' });
+  }
 });
 
 router.get('/farmer-assistant/suggestions', async (req, res) => {

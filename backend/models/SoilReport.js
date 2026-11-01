@@ -43,6 +43,11 @@ const soilReportSchema = new mongoose.Schema({
     type: Number,
     default: null
   },
+  fileHash: {
+    type: String,
+    default: null,
+    select: false
+  },
   soilParameters: { type: soilParametersSchema, default: () => ({}) },
   extractionStatus: { type: String, enum: ['pending_review', 'extracted', 'needs_review', 'failed', 'verified', 'manually_entered'], default: 'manually_entered' },
   extractionMethod: { type: String, enum: ['pdf_text', 'ocr', 'manual', null], default: null },
@@ -96,6 +101,10 @@ const soilReportSchema = new mongoose.Schema({
 
 // Compound index for user queries
 soilReportSchema.index({ userId: 1, createdAt: -1 });
+soilReportSchema.index({ userId: 1, fileHash: 1 }, {
+  unique: true,
+  partialFilterExpression: { fileHash: { $type: 'string' } }
+});
 
 // Calculate confidence score before saving
 soilReportSchema.pre('save', function(next) {

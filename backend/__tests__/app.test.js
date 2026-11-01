@@ -26,6 +26,9 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  if (app?.locals?.httpServer?.listening) {
+    await new Promise((resolve) => app.locals.httpServer.close(resolve));
+  }
   await mongoose.connection.close();
   if (mongoServer) await mongoServer.stop();
 });
@@ -163,6 +166,61 @@ describe('Soil2Crop API Tests', () => {
       expect(res.status).toBe(400);
       expect(res.body.success).toBe(false);
     });
+
+    test('soil upload rejects unsupported files and content that does not match its declared type', async () => {
+      const unsupported = await request(app)
+        .post('/api/soilreport/upload')
+        .set('Authorization', `Bearer ${token}`)
+        .field('farmer_id', mongoUserId)
+        .attach('soil_report', Buffer.from('not a soil report'), { filename: 'report.txt', contentType: 'text/plain' });
+      expect(unsupported.status).toBe(400);
+
+      const invalidSignature = await request(app)
+        .post('/api/soilreport/upload')
+        .set('Authorization', `Bearer ${token}`)
+        .field('farmer_id', mongoUserId)
+        .attach('soil_report', Buffer.from('not a PDF'), { filename: 'report.pdf', contentType: 'application/pdf' });
+      expect(invalidSignature.status).toBe(400);
+      expect(invalidSignature.body.message).toMatch(/content does not match/i);
+    });
+
+    test('soil upload enforces the 10 MB limit', async () => {
+      const response = await request(app)
+        .post('/api/soilreport/upload')
+        .set('Authorization', `Bearer ${token}`)
+        .field('farmer_id', mongoUserId)
+        .attach('soil_report', Buffer.alloc(10 * 1024 * 1024 + 1, 0x41), { filename: 'large.pdf', contentType: 'application/pdf' });
+      expect(response.status).toBe(400);
+      expect(response.body.message).toMatch(/too large/i);
+    });
+
+    test('soil upload associates a report with the authenticated farmer and deduplicates identical files', async () => {
+      const document = Buffer.from('%PDF-1.4\ninvalid synthetic test document');
+      const upload = () => request(app)
+        .post('/api/soilreport/upload')
+        .set('Authorization', `Bearer ${token}`)
+        .field('farmer_id', mongoUserId)
+        .attach('soil_report', document, { filename: 'synthetic-test.pdf', contentType: 'application/pdf' });
+
+      const first = await upload();
+      expect(first.status).toBe(201);
+      expect(first.body.report.userId).toBe(userId);
+      expect(first.body.report.extractionStatus).toBe('failed');
+
+      const duplicate = await upload();
+      expect(duplicate.status).toBe(200);
+      expect(duplicate.body.message).toMatch(/already been uploaded/i);
+      expect(duplicate.body.report.reportId).toBe(first.body.report.reportId);
+    });
+
+    test('soil upload refuses an ID that belongs to another farmer', async () => {
+      const response = await request(app)
+        .post('/api/soilreport/upload')
+        .set('Authorization', `Bearer ${token}`)
+        .field('farmer_id', '507f1f77bcf86cd799439011')
+        .attach('soil_report', Buffer.from('%PDF-1.4\ntest'), { filename: 'report.pdf', contentType: 'application/pdf' });
+      expect(response.status).toBe(403);
+    });
     
     test('GET /api/reports/:userId - should get user reports', async () => {
       const res = await request(app)
@@ -266,6 +324,38 @@ describe('Soil2Crop API Tests', () => {
       
       expect(res.status).toBe(400);
       expect(res.body.success).toBe(false);
+    });
+  });
+
+  // ==========================================
+  // FARMER ASSISTANT API
+  // ==========================================
+  describe('Farmer Assistant API', () => {
+    test('POST /api/farmer-assistant - returns an English response and confidence for the authenticated farmer', async () => {
+      const res = await request(app)
+        .post('/api/farmer-assistant')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ query: 'What is soil pH?', language: 'en' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.data.response).toEqual(expect.any(String));
+      expect(res.body.data.confidence).toEqual(expect.any(Number));
+    });
+
+    test('POST /api/farmer-assistant - accepts Telugu and rejects unauthenticated or malformed requests', async () => {
+      const telugu = await request(app)
+        .post('/api/farmer-assistant')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ query: 'నా నేల ఆరోగ్యం ఎలా ఉంది?', language: 'te' });
+      expect(telugu.status).toBe(200);
+      expect(telugu.body.data.response).toEqual(expect.any(String));
+      expect(telugu.body.data.confidence).toEqual(expect.any(Number));
+
+      const unauthenticated = await request(app).post('/api/farmer-assistant').send({ query: 'hello' });
+      const malformed = await request(app).post('/api/farmer-assistant').set('Authorization', `Bearer ${token}`).send({ query: '' });
+      expect(unauthenticated.status).toBe(401);
+      expect(malformed.status).toBe(400);
     });
   });
   

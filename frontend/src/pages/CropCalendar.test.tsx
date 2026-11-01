@@ -26,7 +26,7 @@ const calendarResponse = {
 };
 
 const renderCalendar = (state?: Record<string, string>) => render(
-  <MemoryRouter initialEntries={[{ pathname: "/crop-calendar", state }]}>
+  <MemoryRouter initialEntries={[{ pathname: "/crop-calendar", state }]} future={{ v7_relativeSplatPath: true, v7_startTransition: true }}>
     <Routes><Route path="/crop-calendar" element={<CropCalendar />} /></Routes>
   </MemoryRouter>,
 );
@@ -128,7 +128,7 @@ describe("CropCalendar flow", () => {
     vi.mocked(api.get).mockResolvedValue(calendarResponse as never);
 
     render(
-      <MemoryRouter initialEntries={["/crop-suggestion"]}>
+      <MemoryRouter initialEntries={["/crop-suggestion"]} future={{ v7_relativeSplatPath: true, v7_startTransition: true }}>
         <Routes>
           <Route path="/crop-suggestion" element={<CropSuggestion />} />
           <Route path="/crop-calendar" element={<CropCalendar />} />

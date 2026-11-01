@@ -10,7 +10,11 @@
     "install:all": "npm install && cd backend && npm install && cd ../frontend && npm install",
     "setup": "cd backend && npm install && cd ../frontend && npm install",
     "dev": "concurrently \"npm run backend\" \"npm run frontend\"",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node scripts/run-test-report.js",
+    "test:backend": "npm --prefix backend test -- --runInBand",
+    "test:frontend": "npm --prefix frontend test -- --run",
+    "test:e2e": "playwright test",
+    "test:report": "node scripts/run-test-report.js"
   },
   "keywords": [
     "agriculture",
@@ -23,9 +27,11 @@
   "author": "Soil2Crop Team",
   "license": "MIT",
   "devDependencies": {
+    "@playwright/test": "^1.64.1",
     "concurrently": "^8.2.2"
   },
   "dependencies": {
+    "mongodb-memory-server": "^11.3.0",
     "multer": "^2.1.1"
   },
   "engines": {

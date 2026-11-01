@@ -85,10 +85,12 @@ const initializeAndStart = async () => {
     const iotRoutes = require("./routes/iotRoutes");
     const cropCalendarRoutes = require("./routes/cropCalendar");
     const marketPriceRoutes = require("./routes/marketPrices");
+    const voiceRoutes = require("./routes/voice");
 
     // Mount specific routers before the broad /api router so its compatibility
     // placeholders cannot shadow the implemented market-price endpoint.
     app.use("/api/market-prices", marketPriceRoutes);
+    app.use("/api/voice", voiceRoutes);
     app.use("/api/iot", iotRoutes);
     app.use("/api/crop-calendar", cropCalendarRoutes);
     app.use("/api", apiRoutes);
@@ -120,6 +122,7 @@ const initializeAndStart = async () => {
       console.log(`Database Mode: ${useMemoryDB ? "In-Memory" : "MongoDB"}`);
       console.log("=================================\n");
     });
+    app.locals.httpServer = server;
 
     server.on("error", (err) => {
       console.error(`Soil2Crop API failed to listen on port ${PORT}:`, err.message);

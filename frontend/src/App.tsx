@@ -6,32 +6,32 @@ import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import { LanguageProvider } from "@/context/LanguageContext";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
 import Header from "@/components/Header";
-import Login from "./pages/Login";
-import SoilReport from "./pages/SoilReport";
-import CropSuggestion from "./pages/CropSuggestion";
-import CropDetails from "./pages/CropDetails";
-import CropCalendar from "./pages/CropCalendar";
-import Dashboard from "./pages/Dashboard";
-import NotFound from "./pages/NotFound";
 import BottomNav from "./components/BottomNav";
-import Settings from "./pages/Settings";
-import Alerts from "./pages/Alerts";
-import GovernmentDashboard from "./pages/GovernmentDashboard";
-import MarketDashboard from "./pages/MarketDashboard";
-import IoTDashboard from "./pages/IoTDashboard";
-import IoTDashboardSimulated from "./pages/IoTDashboardSimulated";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import AIFarmerAssistant from "@/components/AIFarmerAssistant";
-import Tutorials from "./pages/Tutorials";
-import CropMonitoring from "./pages/CropMonitoring";
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { HelpButton } from "@/components/HelpButton";
 import { FarmerSupportButton } from "@/components/FarmerSupportButton";
-import VoiceDebug from "@/components/VoiceDebug";
-import ApiConfigurationDebug from "@/pages/ApiConfigurationDebug";
 import { cleanupVoiceInitialization, initializeVoices, isSpeechSupported, stopSpeech } from "@/utils/voiceAssistant";
 
+const Login = lazy(() => import("./pages/Login"));
+const SoilReport = lazy(() => import("./pages/SoilReport"));
+const CropSuggestion = lazy(() => import("./pages/CropSuggestion"));
+const CropDetails = lazy(() => import("./pages/CropDetails"));
+const CropCalendar = lazy(() => import("./pages/CropCalendar"));
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const NotFound = lazy(() => import("./pages/NotFound"));
+const Settings = lazy(() => import("./pages/Settings"));
+const Alerts = lazy(() => import("./pages/Alerts"));
+const GovernmentDashboard = lazy(() => import("./pages/GovernmentDashboard"));
+const MarketDashboard = lazy(() => import("./pages/MarketDashboard"));
+const IoTDashboard = lazy(() => import("./pages/IoTDashboard"));
+const IoTDashboardSimulated = lazy(() => import("./pages/IoTDashboardSimulated"));
+const Tutorials = lazy(() => import("./pages/Tutorials"));
+const CropMonitoring = lazy(() => import("./pages/CropMonitoring"));
+const VoiceDebug = lazy(() => import("@/components/VoiceDebug"));
+const ApiConfigurationDebug = lazy(() => import("@/pages/ApiConfigurationDebug"));
 
 const queryClient = new QueryClient();
 
@@ -77,7 +77,7 @@ const App = () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
-  }, []);
+  }, [toast]);
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -112,6 +112,7 @@ const App = () => {
               <LanguageSwitcher />
             </div>
             <div className="min-h-[calc(100dvh-8rem)] pb-[calc(4.75rem+env(safe-area-inset-bottom))] pt-1">
+              <Suspense fallback={<div role="status" className="px-4 py-8 text-center text-sm text-muted-foreground">Loading page…</div>}>
               <Routes>
                 <Route path="/" element={<Login />} />
                 <Route path="/soil-report" element={<ProtectedRoute><SoilReport /></ProtectedRoute>} />
@@ -131,6 +132,7 @@ const App = () => {
                 {import.meta.env.DEV && <Route path="/dev/api-configuration" element={<ApiConfigurationDebug />} />}
                 <Route path="*" element={<NotFound />} />
               </Routes>
+              </Suspense>
             </div>
             <BottomNav />
           </BrowserRouter>

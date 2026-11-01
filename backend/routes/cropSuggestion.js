@@ -16,7 +16,7 @@ const validate = (req, res, next) => {
 
 const createAdvice = async (req, res) => {
   try {
-    const { farmer_id: farmerId, reportId, district = null } = req.body;
+    const { farmer_id: farmerId, reportId, district = null, season = null, waterAvailability = null } = req.body;
     if (farmerId !== req.userId && farmerId !== req.farmerId) return res.status(403).json({ success: false, message: 'Cannot request advice for another farmer' });
     if (!mongoose.Types.ObjectId.isValid(farmerId) && farmerId !== req.farmerId) return res.status(400).json({ success: false, message: 'Invalid farmer ID.' });
 
@@ -25,7 +25,7 @@ const createAdvice = async (req, res) => {
     const report = await SoilReport.findOne({ reportId, userId: farmer.userId });
     if (!report) return res.status(404).json({ success: false, message: 'Soil report not found for this farmer.' });
 
-    const result = await recommendationService.generateRecommendations(farmer.userId, reportId, district);
+    const result = await recommendationService.generateRecommendations(farmer.userId, reportId, district, { season, waterAvailability });
     return res.json(result);
   } catch (error) {
     console.error('Crop advice request failed:', error);
@@ -36,6 +36,9 @@ const createAdvice = async (req, res) => {
 const requiredReportFields = [
   body('farmer_id').notEmpty().withMessage('Farmer ID is required'),
   body('reportId').notEmpty().withMessage('Saved soil report ID is required'),
+  body('district').optional().isString().trim().isLength({ max: 100 }).withMessage('District must be 100 characters or fewer'),
+  body('season').optional().isString().trim().isLength({ max: 40 }).withMessage('Season must be 40 characters or fewer'),
+  body('waterAvailability').optional().isIn(['Low', 'Medium', 'High', 'low', 'medium', 'high']).withMessage('Water availability must be Low, Medium, or High'),
   validate
 ];
 

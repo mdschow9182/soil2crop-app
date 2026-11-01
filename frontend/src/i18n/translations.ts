@@ -237,7 +237,6 @@ const rawTranslations = {
     uploadCropImage: "Upload Crop Image",
     cameraCapture: "Camera Capture",
     analyzeCrop: "Analyze Crop",
-    analyzing: "Analyzing...",
     healthStatus: "Health Status",
     possibleIssue: "Possible Issue",
     suggestedAction: "Suggested Action",

@@ -1,12 +1,12 @@
-import { useState, useRef, useEffect } from "react";
-import { Send, Bot, User, Loader2, MessageSquare, X, Globe } from "lucide-react";
+import { useCallback, useState, useRef, useEffect } from "react";
+import { Send, Bot, User, Loader2, MessageSquare, X, Globe, Mic, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { fetchFarmerAssistant } from "@/api";
+import { fetchFarmerAssistant, transcribeVoice } from "@/api";
 import { useLanguage } from "@/context/LanguageContext";
 import { stopSpeech } from "@/utils/voiceAssistant";
 import { VoiceButton } from "@/components/VoiceButton";
@@ -28,6 +28,11 @@ const AIFarmerAssistant = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [voiceError, setVoiceError] = useState("");
+  const recordingRef = useRef<{ stream: MediaStream; context: AudioContext; source: MediaStreamAudioSourceNode; processor: ScriptProcessorNode; mute: GainNode; chunks: Float32Array[]; sampleRate: number } | null>(null);
+  const recordingLimitRef = useRef<number | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
@@ -51,15 +56,87 @@ const AIFarmerAssistant = () => {
   }, [messages]);
 
   useEffect(() => {
-    // Add welcome message when chat opens
-    if (isOpen && messages.length === 0) {
-      addWelcomeMessage();
-    }
-  }, [isOpen]);
-
-  useEffect(() => {
     stopSpeech();
   }, [language]);
+
+  useEffect(() => () => {
+    const recording = recordingRef.current;
+    if (recording) {
+      recording.processor.disconnect(); recording.source.disconnect();
+      recording.mute.disconnect();
+      recording.stream.getTracks().forEach((track) => track.stop());
+      void recording.context.close();
+    }
+  }, []);
+
+  const startRecording = async () => {
+    setVoiceError("");
+    if (!navigator.mediaDevices?.getUserMedia || typeof AudioContext === "undefined") {
+      setVoiceError("Audio recording is unavailable in this browser.");
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true } });
+      const context = new AudioContext();
+      const source = context.createMediaStreamSource(stream);
+      const processor = context.createScriptProcessor(4096, 1, 1);
+      const mute = context.createGain();
+      mute.gain.value = 0;
+      const chunks: Float32Array[] = [];
+      processor.onaudioprocess = (event) => chunks.push(new Float32Array(event.inputBuffer.getChannelData(0)));
+      source.connect(processor);
+      processor.connect(mute);
+      mute.connect(context.destination);
+      recordingRef.current = { stream, context, source, processor, mute, chunks, sampleRate: context.sampleRate };
+      setIsRecording(true);
+      recordingLimitRef.current = window.setTimeout(() => { void stopRecording(); }, 30000);
+    } catch {
+      setVoiceError("Microphone permission was denied or the microphone is unavailable.");
+    }
+  };
+
+  const stopRecording = async () => {
+    const recording = recordingRef.current;
+    if (!recording) return;
+    recordingRef.current = null;
+    if (recordingLimitRef.current !== null) window.clearTimeout(recordingLimitRef.current);
+    recordingLimitRef.current = null;
+    setIsRecording(false);
+    recording.processor.disconnect(); recording.source.disconnect();
+    recording.mute.disconnect();
+    recording.stream.getTracks().forEach((track) => track.stop());
+    await recording.context.close();
+    const totalSamples = recording.chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+    if (!totalSamples) { setVoiceError("No audio was captured. Please try again."); return; }
+    const samples = new Float32Array(totalSamples);
+    let offset = 0;
+    recording.chunks.forEach((chunk) => { samples.set(chunk, offset); offset += chunk.length; });
+    const targetRate = 16000;
+    const ratio = recording.sampleRate / targetRate;
+    const length = Math.ceil(samples.length / ratio);
+    const wavBuffer = new ArrayBuffer(44 + length * 2);
+    const view = new DataView(wavBuffer);
+    const writeString = (position: number, value: string) => { for (let i = 0; i < value.length; i++) view.setUint8(position + i, value.charCodeAt(i)); };
+    writeString(0, "RIFF"); view.setUint32(4, 36 + length * 2, true); writeString(8, "WAVE"); writeString(12, "fmt ");
+    view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true); view.setUint32(24, targetRate, true);
+    view.setUint32(28, targetRate * 2, true); view.setUint16(32, 2, true); view.setUint16(34, 16, true); writeString(36, "data"); view.setUint32(40, length * 2, true);
+    for (let i = 0; i < length; i++) {
+      const sourceIndex = i * ratio;
+      const lowerIndex = Math.floor(sourceIndex);
+      const upperIndex = Math.min(samples.length - 1, lowerIndex + 1);
+      const fraction = sourceIndex - lowerIndex;
+      const sample = Math.max(-1, Math.min(1, samples[lowerIndex] * (1 - fraction) + samples[upperIndex] * fraction));
+      view.setInt16(44 + i * 2, sample < 0 ? sample * 32768 : sample * 32767, true);
+    }
+    setIsTranscribing(true);
+    try {
+      const result = await transcribeVoice(new Blob([wavBuffer], { type: "audio/wav" }), language);
+      if (result.transcript) setInput(result.transcript);
+      else setVoiceError("No speech was recognized. Please try again.");
+    } catch (error) {
+      setVoiceError(error instanceof Error ? error.message : "Transcription failed. Please try again.");
+    } finally { setIsTranscribing(false); }
+  };
 
   useEffect(() => {
     const openAssistant = () => setIsOpen(true);
@@ -67,7 +144,7 @@ const AIFarmerAssistant = () => {
     return () => window.removeEventListener("soil2crop:open-ai-assistant", openAssistant);
   }, []);
 
-  const addWelcomeMessage = () => {
+  const addWelcomeMessage = useCallback(() => {
     const welcomeMessage: Message = {
       id: Date.now().toString(),
       role: "assistant",
@@ -76,7 +153,14 @@ const AIFarmerAssistant = () => {
       language,
     };
     setMessages([welcomeMessage]);
-  };
+  }, [language]);
+
+  useEffect(() => {
+    // Add welcome message when chat opens
+    if (isOpen && messages.length === 0) {
+      addWelcomeMessage();
+    }
+  }, [isOpen, messages.length, addWelcomeMessage]);
 
   const handleSendMessage = async (question?: string) => {
     const messageText = question || input.trim();
@@ -110,14 +194,15 @@ const AIFarmerAssistant = () => {
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
-        content: response.response || "I'm sorry, I couldn't process your request. Please try again.",
+        content: response.data?.response || response.response || "I'm sorry, I couldn't process your request. Please try again.",
         timestamp: new Date(),
         language,
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
 
-      if (response.confidence < 0.5) {
+      const confidence = response.data?.confidence ?? response.confidence;
+      if (typeof confidence === "number" && confidence < 0.5) {
         toast({
           title: "Low Confidence Response",
           description: "The assistant wasn't very confident in this answer. Please verify with an expert.",
@@ -176,6 +261,7 @@ const AIFarmerAssistant = () => {
     return (
       <Button
         onClick={() => setIsOpen(true)}
+        aria-label="Open AI Farming Assistant"
         className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] right-20 z-50 hidden h-14 w-14 rounded-full bg-primary shadow-lg hover:bg-primary/90 sm:inline-flex"
         size="icon"
       >
@@ -277,6 +363,7 @@ const AIFarmerAssistant = () => {
                         size="sm"
                         variant="ghost"
                         className="h-6 px-2"
+                        useGnani
                       />
                     )}
                   </div>
@@ -339,9 +426,22 @@ const AIFarmerAssistant = () => {
             className="flex-1 min-w-0"
           />
           <Button
+            type="button"
+            variant={isRecording ? "destructive" : "outline"}
+            size="icon"
+            disabled={isLoading || isTranscribing}
+            onClick={isRecording ? stopRecording : startRecording}
+            aria-label={isRecording ? "Stop recording" : "Start voice recording"}
+            title={isRecording ? "Stop recording" : "Start voice recording"}
+            className="shrink-0"
+          >
+            {isTranscribing ? <Loader2 className="h-4 w-4 animate-spin" /> : isRecording ? <Square className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+          </Button>
+          <Button
             onClick={() => handleSendMessage()}
             disabled={isLoading || !input.trim()}
             size="icon"
+            aria-label="Send"
             className="shrink-0"
           >
             {isLoading ? (
@@ -351,6 +451,11 @@ const AIFarmerAssistant = () => {
             )}
           </Button>
         </div>
+        {(isRecording || isTranscribing || voiceError) && (
+          <p role={voiceError ? "alert" : "status"} className={`mt-2 text-center text-xs ${voiceError ? "text-destructive" : "text-muted-foreground"}`}>
+            {voiceError || (isRecording ? "Recording… click stop when finished (30 seconds maximum)." : "Transcribing audio…")}
+          </p>
+        )}
         <p className="text-xs text-muted-foreground mt-2 text-center">
           AI-powered farming advice • Responses may vary
         </p>

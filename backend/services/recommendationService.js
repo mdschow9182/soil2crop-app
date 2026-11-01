@@ -13,7 +13,7 @@ class RecommendationService {
   /**
    * Generate crop recommendations for a user
    */
-  async generateRecommendations(userId, soilReportId, district) {
+  async generateRecommendations(userId, soilReportId, district, context = {}) {
     try {
       const soilReport = await SoilReport.findOne({ reportId: soilReportId, userId });
       if (!soilReport) {
@@ -28,7 +28,7 @@ class RecommendationService {
       };
       console.log('[CropAdvice] database crop count:', crops.length);
       console.log('[CropAdvice] engine input:', JSON.stringify(engineInput));
-      const advice = generateCropAdvice({ report, crops });
+      const advice = generateCropAdvice({ report, crops, context: { ...context, location: district || context.location || null } });
       console.log('[CropAdvice] engine output:', JSON.stringify({
         catalogAvailability: advice.catalogAvailability,
         evaluatedFactors: advice.evaluatedFactors,

@@ -72,6 +72,7 @@ export const apiCall = async (endpoint, options = {}) => {
     headers, // Let the browser add the multipart boundary for FormData.
   };
   delete config.params;
+  delete config.responseType;
 
   try {
     const response = await fetch(url.toString(), config);
@@ -90,6 +91,17 @@ export const apiCall = async (endpoint, options = {}) => {
       throw new Error(data.message || `HTTP error! status: ${response.status}`);
     }
     
+    if (options.responseType === 'blob') {
+      const contentType = response.headers.get('content-type') || '';
+      if (!contentType.toLowerCase().startsWith('audio/')) {
+        console.error(`[API] Expected audio but got ${contentType || 'no content type'} from ${endpoint}`);
+        throw new Error('Voice service returned an unsupported audio format.');
+      }
+      const audio = await response.blob();
+      if (!audio.size) throw new Error('Voice service returned empty audio.');
+      return audio;
+    }
+
     // Parse JSON response
     const contentType = response.headers.get('content-type');
     if (!contentType || !contentType.includes('application/json')) {
@@ -290,10 +302,10 @@ export const getCropRecommendation = async (soilData) => {
 };
 
 // Existing crop-suggestion API now accepts only a saved, farmer-confirmed report.
-export const getVerifiedCropAdvice = async ({ farmerId, reportId, district }) => {
+export const getVerifiedCropAdvice = async ({ farmerId, reportId, district, season, waterAvailability }) => {
   return apiCall('/api/crop-suggestion', {
     method: 'POST',
-    body: JSON.stringify({ farmer_id: farmerId, reportId, district }),
+    body: JSON.stringify({ farmer_id: farmerId, reportId, district, season, waterAvailability }),
   });
 };
 
@@ -314,6 +326,17 @@ export const fetchFarmerAssistant = async (query, language = 'en') => {
     }),
   });
 };
+
+export const transcribeVoice = async (audio, language) => {
+  const form = new FormData();
+  form.append('audio', audio, 'recording.wav');
+  form.append('language', language);
+  return apiCall('/api/voice/transcribe', { method: 'POST', body: form });
+};
+
+export const speakWithGnani = async (text, language) => apiCall('/api/voice/speak', {
+  method: 'POST', body: JSON.stringify({ text, language }), responseType: 'blob',
+});
 
 export const getSuggestedQuestions = async () => {
   return apiCall('/api/farmer-assistant/suggestions');

@@ -303,3 +303,5 @@ router.get('/', (req, res) => {
 });
 
 module.exports = router;
+// Shared read-only project calendar data for the assistant's planting-season answers.
+module.exports.calendarData = cropCalendarDB;
